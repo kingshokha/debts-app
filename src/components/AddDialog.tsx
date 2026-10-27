@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { evalExpression, withCurrentTime } from '../format';
 import { colors } from '../theme';
@@ -19,24 +19,15 @@ type Props = {
   onSubmit: (name: string, amount: number, date: number, comment: string, groupId: string | null) => void;
 };
 
+/** Поля сбрасываются за счёт нового `key` при каждом открытии (см. App). */
 export function AddDialog(p: Props) {
   const { visible, contacts, suggestions, onClose } = p;
   const [name, setName] = useState('');
   const [amountText, setAmountText] = useState('');
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => new Date());
   const [comment, setComment] = useState('');
-  const [groupId, setGroupId] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState(p.defaultGroupId);
   const [nameFocused, setNameFocused] = useState(false);
-
-  useEffect(() => {
-    if (visible) {
-      setName('');
-      setAmountText('');
-      setDate(new Date());
-      setComment('');
-      setGroupId(p.defaultGroupId);
-    }
-  }, [visible]);
 
   const amount = evalExpression(amountText);
   const valid = name.trim().length > 0 && amount !== null && amount > 0;

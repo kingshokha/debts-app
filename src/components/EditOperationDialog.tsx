@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { evalExpression, formatAmount, withTimeOf } from '../format';
 import { colors } from '../theme';
@@ -15,22 +15,16 @@ type Props = {
   onSubmit: (contactId: string, opId: string, patch: Omit<Operation, 'id'>) => void;
 };
 
-export function EditOperationDialog({ contact, operation, suggestions, onClose, onSubmit }: Props) {
-  const [amountText, setAmountText] = useState('');
-  const [date, setDate] = useState(new Date());
-  const [comment, setComment] = useState('');
-  const [sign, setSign] = useState<1 | -1>(1);
+// Форма монтируется заново при каждом открытии и берёт начальные значения из операции
+export function EditOperationDialog({ operation, ...rest }: Props) {
+  return operation ? <EditOperationForm key={operation.id} operation={operation} {...rest} /> : null;
+}
 
-  useEffect(() => {
-    if (operation) {
-      setAmountText(formatAmount(Math.abs(operation.amount), false).replace(/\s/g, ''));
-      setDate(new Date(operation.date));
-      setComment(operation.comment);
-      setSign(operation.amount < 0 ? -1 : 1);
-    }
-  }, [operation?.id]);
-
-  if (!operation) return null;
+function EditOperationForm({ contact, operation, suggestions, onClose, onSubmit }: Props & { operation: Operation }) {
+  const [amountText, setAmountText] = useState(() => formatAmount(Math.abs(operation.amount), false).replace(/\s/g, ''));
+  const [date, setDate] = useState(() => new Date(operation.date));
+  const [comment, setComment] = useState(operation.comment);
+  const [sign, setSign] = useState<1 | -1>(operation.amount < 0 ? -1 : 1);
 
   const amount = evalExpression(amountText);
   const valid = amount !== null && amount > 0;

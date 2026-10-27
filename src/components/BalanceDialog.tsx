@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { evalExpression, formatAmount, withCurrentTime } from '../format';
 import { balanceOf } from '../store';
@@ -15,20 +15,15 @@ type Props = {
   onHistory: (contactId: string) => void;
 };
 
-export function BalanceDialog({ contact, suggestions, onClose, onSubmit, onHistory }: Props) {
+// Форма монтируется заново при каждом открытии, поэтому поля всегда начинаются пустыми
+export function BalanceDialog({ contact, ...rest }: Props) {
+  return contact ? <BalanceForm key={contact.id} contact={contact} {...rest} /> : null;
+}
+
+function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Props & { contact: Contact }) {
   const [amountText, setAmountText] = useState('');
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => new Date());
   const [comment, setComment] = useState('');
-
-  useEffect(() => {
-    if (contact) {
-      setAmountText('');
-      setDate(new Date());
-      setComment('');
-    }
-  }, [contact?.id]);
-
-  if (!contact) return null;
 
   const balance = balanceOf(contact);
   const amount = evalExpression(amountText);

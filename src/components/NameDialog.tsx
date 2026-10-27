@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { colors } from '../theme';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
@@ -13,14 +13,12 @@ type Props = {
 };
 
 /** Диалог ввода названия: переименование контакта, создание и переименование группы. */
-export function NameDialog({ title, initialValue, placeholder, onClose, onSubmit }: Props) {
-  const [name, setName] = useState('');
+export function NameDialog({ initialValue, ...rest }: Props) {
+  return initialValue !== null ? <NameForm initialValue={initialValue} {...rest} /> : null;
+}
 
-  useEffect(() => {
-    if (initialValue !== null) setName(initialValue);
-  }, [initialValue]);
-
-  if (initialValue === null) return null;
+function NameForm({ title, initialValue, placeholder, onClose, onSubmit }: Props & { initialValue: string }) {
+  const [name, setName] = useState(initialValue);
   const valid = name.trim().length > 0;
 
   const save = () => {

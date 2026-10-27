@@ -62,6 +62,8 @@ function MainScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  // Растёт при каждом открытии Add/Backup: новый key пересоздаёт диалог с чистыми полями
+  const [dialogKey, setDialogKey] = useState(0);
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number; height: number } } | null>(null);
   const [balanceId, setBalanceId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -190,7 +192,10 @@ function MainScreen() {
       <View style={[styles.header, { paddingTop: insets.top }]}>
         {search === null ? (
           <>
-            <Pressable onPress={() => setBackupOpen(true)} hitSlop={8} style={styles.iconBtn}>
+            <Pressable onPress={() => {
+                setDialogKey((k) => k + 1);
+                setBackupOpen(true);
+              }} hitSlop={8} style={styles.iconBtn}>
               <MaterialCommunityIcons name="menu" size={30} color="#fff" />
             </Pressable>
             <View style={{ flex: 1 }} />
@@ -284,13 +289,17 @@ function MainScreen() {
         <Pressable
           style={styles.fabPress}
           android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
-          onPress={() => setAddOpen(true)}
+          onPress={() => {
+            setDialogKey((k) => k + 1);
+            setAddOpen(true);
+          }}
         >
           <MaterialCommunityIcons name="plus" size={32} color="#fff" />
         </Pressable>
       </View>
 
       <AddDialog
+        key={`add-${dialogKey}`}
         visible={addOpen}
         contacts={contacts}
         groups={groups}
@@ -349,6 +358,7 @@ function MainScreen() {
         ))}
       </Dialog>
       <BackupDialog
+        key={`backup-${dialogKey}`}
         visible={backupOpen}
         contacts={contacts}
         groups={groups}

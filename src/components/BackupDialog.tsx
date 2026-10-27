@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { confirmAction, notify } from '../confirm';
 import { type Backup, parseBackup } from '../store';
@@ -14,17 +14,13 @@ type Props = {
   onImport: (backup: Backup) => void;
 };
 
-/** Меню «☰»: резервная копия через «Поделиться» и восстановление из вставленного текста. */
+/**
+ * Меню «☰»: резервная копия через «Поделиться» и восстановление из вставленного текста.
+ * Состояние сбрасывается за счёт нового `key` при каждом открытии (см. App).
+ */
 export function BackupDialog({ visible, contacts, groups, onClose, onImport }: Props) {
   const [importMode, setImportMode] = useState(false);
   const [text, setText] = useState('');
-
-  useEffect(() => {
-    if (visible) {
-      setImportMode(false);
-      setText('');
-    }
-  }, [visible]);
 
   const exportData = async () => {
     onClose();

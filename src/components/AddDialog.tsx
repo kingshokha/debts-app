@@ -2,23 +2,30 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { evalExpression, withCurrentTime } from '../format';
 import { colors } from '../theme';
-import type { Contact } from '../types';
+import type { Contact, Group } from '../types';
 import { AmountFields } from './AmountFields';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
+import { GroupSelect } from './GroupSelect';
 
 type Props = {
   visible: boolean;
   contacts: Contact[];
+  groups: Group[];
+  /** Группа, выбранная по умолчанию (текущая в режиме «По группам»). */
+  defaultGroupId: string | null;
   suggestions: string[];
   onClose: () => void;
-  onSubmit: (name: string, amount: number, date: number, comment: string) => void;
+  onCreateGroup: (name: string) => string;
+  onSubmit: (name: string, amount: number, date: number, comment: string, groupId: string | null) => void;
 };
 
-export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }: Props) {
+export function AddDialog(p: Props) {
+  const { visible, contacts, suggestions, onClose } = p;
   const [name, setName] = useState('');
   const [amountText, setAmountText] = useState('');
   const [date, setDate] = useState(new Date());
   const [comment, setComment] = useState('');
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [nameFocused, setNameFocused] = useState(false);
 
   useEffect(() => {
@@ -27,6 +34,7 @@ export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }:
       setAmountText('');
       setDate(new Date());
       setComment('');
+      setGroupId(p.defaultGroupId);
     }
   }, [visible]);
 
@@ -42,7 +50,7 @@ export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }:
 
   const submit = (sign: 1 | -1) => {
     if (!valid) return;
-    onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim());
+    p.onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim(), groupId);
     onClose();
   };
 
@@ -63,7 +71,14 @@ export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }:
       {nameFocused && matches.length ? (
         <View style={styles.matches}>
           {matches.map((c) => (
-            <Pressable key={c.id} style={styles.match} onPress={() => setName(c.name)}>
+            <Pressable
+              key={c.id}
+              style={styles.match}
+              onPress={() => {
+                setName(c.name);
+                if (c.groupId) setGroupId(c.groupId);
+              }}
+            >
               <Text style={styles.matchText} numberOfLines={1}>
                 {c.name}
               </Text>
@@ -71,6 +86,9 @@ export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }:
           ))}
         </View>
       ) : null}
+
+      <Text style={styles.label}>Группа</Text>
+      <GroupSelect groups={p.groups} value={groupId} onChange={setGroupId} onCreate={p.onCreateGroup} />
 
       <View style={{ height: 24 }} />
       <AmountFields
@@ -96,6 +114,7 @@ export function AddDialog({ visible, contacts, suggestions, onClose, onSubmit }:
 
 const styles = StyleSheet.create({
   right: { flexDirection: 'row', gap: 24 },
+  label: { color: colors.muted, fontSize: 13, marginTop: 18, marginBottom: 8 },
   matches: { backgroundColor: '#383838', borderRadius: 4, marginTop: 4 },
   match: { paddingVertical: 10, paddingHorizontal: 12 },
   matchText: { color: colors.text, fontSize: 15 },

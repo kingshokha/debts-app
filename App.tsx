@@ -6,17 +6,21 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { AddDialog } from './src/components/AddDialog';
 import { BackupDialog } from './src/components/BackupDialog';
 import { BalanceDialog } from './src/components/BalanceDialog';
+import { ContactGroupDialog } from './src/components/ContactGroupDialog';
 import { ContactRow } from './src/components/ContactRow';
+import { Dialog } from './src/components/Dialog';
+import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
+import { NameDialog } from './src/components/NameDialog';
 import { PopupMenu } from './src/components/PopupMenu';
-import { RenameDialog } from './src/components/RenameDialog';
 import { SortDialog } from './src/components/SortDialog';
 import { confirmAction, notify } from './src/confirm';
 import { formatAmount } from './src/format';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
-import { colors } from './src/theme';
+import { amountColor, colors } from './src/theme';
+import type { Contact, Group } from './src/types';
 
-type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'delete';
+type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'group' | 'delete';
 
 const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'payOff', label: 'Погасить всю сумму' },
@@ -24,8 +28,21 @@ const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'history', label: 'История операций' },
   { action: 'clear', label: 'Очистить историю' },
   { action: 'rename', label: 'Переименовать' },
+  { action: 'group', label: 'Изменить группу' },
   { action: 'delete', label: 'Удалить контакт' },
 ];
+
+/** Что сейчас редактируется в NameDialog. */
+type NameEdit =
+  | { kind: 'contact'; id: string; initial: string }
+  | { kind: 'newGroup'; initial: string }
+  | { kind: 'renameGroup'; id: string; initial: string };
+
+const NAME_DIALOG_TITLE: Record<NameEdit['kind'], string> = {
+  contact: 'Переименовать',
+  newGroup: 'Новая группа',
+  renameGroup: 'Переименовать группу',
+};
 
 export default function App() {
   return (
@@ -39,7 +56,7 @@ export default function App() {
 function MainScreen() {
   const insets = useSafeAreaInsets();
   const debts = useDebts();
-  const { contacts, sort } = debts;
+  const { contacts, groups, sort, view } = debts;
 
   const [search, setSearch] = useState<string | null>(null); // null — поиск закрыт
   const [addOpen, setAddOpen] = useState(false);
@@ -48,24 +65,47 @@ function MainScreen() {
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number; height: number } } | null>(null);
   const [balanceId, setBalanceId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
-  const [renameId, setRenameId] = useState<string | null>(null);
+  const [nameEdit, setNameEdit] = useState<NameEdit | null>(null);
+  const [groupContactId, setGroupContactId] = useState<string | null>(null);
+  const [groupActions, setGroupActions] = useState<Group | null>(null);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
+
+  const inGroups = view.mode === 'groups';
+  const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
+  // Ссылка на удалённую группу считается «Без группы»
+  const groupOf = useCallback((c: Contact) => (c.groupId && groupIds.has(c.groupId) ? c.groupId : null), [groupIds]);
+  const selectedGroup = view.groupId && groupIds.has(view.groupId) ? view.groupId : null;
+
+  const groupCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of contacts) {
+      const key = groupOf(c) ?? '';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [contacts, groupOf]);
+
+  // В режиме «По группам» показываем выбранную группу; поиск ищет по всем контактам
+  const scope = useMemo(
+    () => (inGroups && search === null ? contacts.filter((c) => groupOf(c) === selectedGroup) : contacts),
+    [contacts, inGroups, search, selectedGroup, groupOf],
+  );
 
   const totals = useMemo(() => {
     let plus = 0;
     let minus = 0;
-    for (const c of contacts) {
+    for (const c of scope) {
       const b = balanceOf(c);
       if (b > 0) plus += b;
       else minus += b;
     }
     return { plus, minus, total: plus + minus };
-  }, [contacts]);
+  }, [scope]);
 
   const visible = useMemo(() => {
     const q = search?.trim().toLowerCase() ?? '';
-    const list = contacts.filter((c) => {
+    const list = scope.filter((c) => {
       if (!sort.showZero && balanceOf(c) === 0) return false;
       if (!q) return true;
       return c.name.toLowerCase().includes(q) || c.operations.some((op) => op.comment.toLowerCase().includes(q));
@@ -77,7 +117,7 @@ function MainScreen() {
       date: (a: typeof list[0], b: typeof list[0]) => lastDateOf(a) - lastDateOf(b),
     }[sort.key];
     return list.sort((a, b) => dir * cmp(a, b));
-  }, [contacts, sort, search]);
+  }, [scope, sort, search]);
 
   // Прошлые комментарии для выпадающего списка: свежие сверху, без повторов
   const suggestions = useMemo(() => {
@@ -113,7 +153,9 @@ function MainScreen() {
           true,
         );
       case 'rename':
-        return setRenameId(contact.id);
+        return setNameEdit({ kind: 'contact', id: contact.id, initial: contact.name });
+      case 'group':
+        return setGroupContactId(contact.id);
       case 'delete':
         return confirmAction(
           'Удалить контакт?',
@@ -123,6 +165,24 @@ function MainScreen() {
           true,
         );
     }
+  };
+
+  const submitName = (name: string) => {
+    if (!nameEdit) return;
+    if (nameEdit.kind === 'contact') debts.rename(nameEdit.id, name);
+    else if (nameEdit.kind === 'renameGroup') debts.renameGroup(nameEdit.id, name);
+    else debts.setView({ mode: 'groups', groupId: debts.addGroup(name) });
+  };
+
+  const deleteGroup = (group: Group) => {
+    const count = groupCounts[group.id] ?? 0;
+    confirmAction(
+      'Удалить группу?',
+      `«${group.name}»\nКонтакты (${count}) не удалятся — они перейдут в «Без группы».`,
+      'Удалить',
+      () => debts.removeGroup(group.id),
+      true,
+    );
   };
 
   return (
@@ -139,13 +199,26 @@ function MainScreen() {
               <MaterialCommunityIcons name="magnify" size={28} color="#fff" />
             </Pressable>
             <View style={styles.sep} />
+            <Pressable
+              onPress={() => debts.setView({ ...view, mode: inGroups ? 'all' : 'groups' })}
+              hitSlop={8}
+              style={styles.iconBtn}
+              accessibilityLabel={inGroups ? 'Показать всех' : 'Показать по группам'}
+            >
+              <MaterialCommunityIcons
+                name={inGroups ? 'folder' : 'folder-outline'}
+                size={27}
+                color={inGroups ? colors.accent : '#fff'}
+              />
+            </Pressable>
+            <View style={styles.sep} />
             <Pressable onPress={() => setSortOpen(true)} hitSlop={8} style={styles.iconBtn}>
               <MaterialCommunityIcons name="sort-ascending" size={28} color="#fff" />
             </Pressable>
             <View style={styles.sep} />
             <View style={styles.totals}>
-              <Text style={[styles.totalSmall, { color: colors.red }]}>{formatAmount(totals.minus)}</Text>
-              <Text style={[styles.totalSmall, { color: colors.green }]}>{formatAmount(totals.plus)}</Text>
+              <Text style={[styles.totalSmall, { color: amountColor(totals.minus) }]}>{formatAmount(totals.minus)}</Text>
+              <Text style={[styles.totalSmall, { color: amountColor(totals.plus) }]}>{formatAmount(totals.plus)}</Text>
               <View style={styles.totalLine} />
               <Text style={styles.total}>{formatAmount(totals.total)}</Text>
             </View>
@@ -174,6 +247,17 @@ function MainScreen() {
         )}
       </View>
 
+      {inGroups && search === null ? (
+        <GroupBar
+          groups={groups}
+          counts={groupCounts}
+          selected={selectedGroup}
+          onSelect={(groupId) => debts.setView({ mode: 'groups', groupId })}
+          onLongPress={setGroupActions}
+          onCreate={() => setNameEdit({ kind: 'newGroup', initial: '' })}
+        />
+      ) : null}
+
       {debts.loaded ? (
         <FlatList
           data={visible}
@@ -182,7 +266,13 @@ function MainScreen() {
           contentContainerStyle={{ paddingTop: 7, paddingBottom: insets.bottom + 100 }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <Text style={styles.empty}>{search ? 'Ничего не найдено' : 'Пока нет должников.\nНажмите «+», чтобы добавить.'}</Text>
+            <Text style={styles.empty}>
+              {search
+                ? 'Ничего не найдено'
+                : inGroups
+                  ? 'В этой группе пока никого.\nНажмите «+», чтобы добавить.'
+                  : 'Пока нет должников.\nНажмите «+», чтобы добавить.'}
+            </Text>
           }
         />
       ) : (
@@ -203,8 +293,11 @@ function MainScreen() {
       <AddDialog
         visible={addOpen}
         contacts={contacts}
+        groups={groups}
+        defaultGroupId={inGroups ? selectedGroup : null}
         suggestions={suggestions}
         onClose={() => setAddOpen(false)}
+        onCreateGroup={debts.addGroup}
         onSubmit={debts.addContact}
       />
       <SortDialog visible={sortOpen} sort={sort} onChange={debts.setSort} onClose={() => setSortOpen(false)} />
@@ -223,8 +316,45 @@ function MainScreen() {
         onDeleteOperation={debts.removeOperation}
         onUpdateOperation={debts.updateOperation}
       />
-      <RenameDialog contact={byId(renameId)} onClose={() => setRenameId(null)} onSubmit={debts.rename} />
-      <BackupDialog visible={backupOpen} contacts={contacts} onClose={() => setBackupOpen(false)} onImport={debts.replaceAll} />
+      <NameDialog
+        title={nameEdit ? NAME_DIALOG_TITLE[nameEdit.kind] : ''}
+        initialValue={nameEdit?.initial ?? null}
+        placeholder={nameEdit?.kind === 'contact' ? 'Имя контакта' : 'Название группы'}
+        onClose={() => setNameEdit(null)}
+        onSubmit={submitName}
+      />
+      <ContactGroupDialog
+        contact={byId(groupContactId)}
+        groups={groups}
+        onClose={() => setGroupContactId(null)}
+        onCreateGroup={debts.addGroup}
+        onSubmit={debts.setContactGroup}
+      />
+      <Dialog visible={groupActions !== null} onClose={() => setGroupActions(null)} title={groupActions?.name}>
+        {(['rename', 'delete'] as const).map((action) => (
+          <Pressable
+            key={action}
+            style={styles.dialogItem}
+            onPress={() => {
+              const group = groupActions!;
+              setGroupActions(null);
+              if (action === 'rename') setNameEdit({ kind: 'renameGroup', id: group.id, initial: group.name });
+              else deleteGroup(group);
+            }}
+          >
+            <Text style={[styles.dialogItemText, action === 'delete' && { color: colors.red }]}>
+              {action === 'rename' ? 'Переименовать группу' : 'Удалить группу'}
+            </Text>
+          </Pressable>
+        ))}
+      </Dialog>
+      <BackupDialog
+        visible={backupOpen}
+        contacts={contacts}
+        groups={groups}
+        onClose={() => setBackupOpen(false)}
+        onImport={debts.importBackup}
+      />
     </View>
   );
 }
@@ -240,6 +370,8 @@ const styles = StyleSheet.create({
   total: { color: '#fff', fontSize: 15, fontWeight: '600', lineHeight: 18 },
   search: { flex: 1, color: '#fff', fontSize: 18, paddingVertical: 8 },
   empty: { color: colors.muted, textAlign: 'center', marginTop: 60, fontSize: 16, lineHeight: 24 },
+  dialogItem: { paddingVertical: 14 },
+  dialogItemText: { color: colors.text, fontSize: 17 },
   fab: {
     position: 'absolute',
     right: 20,

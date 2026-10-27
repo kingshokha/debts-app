@@ -2,9 +2,15 @@
 async (page) => {
   const day = 86400000;
   const now = Date.now();
+  const groups = [
+    { id: 'g-shop', name: 'Магазин' },
+    { id: 'g-market', name: 'Рынок' },
+  ];
+  const groupOf = { a: 'g-shop', b: 'g-shop', c: 'g-shop', d: 'g-market', e: 'g-market' };
   const mk = (id, name, ops) => ({
     id,
     name,
+    groupId: groupOf[id] ?? null,
     createdAt: now - 30 * day,
     operations: ops.map(([amount, daysAgo, comment], i) => ({ id: `${id}-${i}`, amount, date: now - daysAgo * day, comment })),
   });
@@ -19,7 +25,14 @@ async (page) => {
     mk('h', 'ШМ Нулевой Баланс 900000008', [[500, 20, 'Чайник'], [-500, 9, 'Погашение']]),
     mk('i', 'ПЗ Крупная Сумма 900000009', [[812448, 12, 'Холодильник + телевизор']]),
   ];
-  await page.evaluate((data) => localStorage.setItem('debts/contacts/v1', JSON.stringify(data)), contacts);
+  await page.evaluate(
+    ([c, g]) => {
+      localStorage.setItem('debts/contacts/v1', JSON.stringify(c));
+      localStorage.setItem('debts/groups/v1', JSON.stringify(g));
+      localStorage.removeItem('debts/view/v1');
+    },
+    [contacts, groups],
+  );
   await page.reload();
-  return 'seeded ' + contacts.length;
+  return `seeded ${contacts.length} contacts, ${groups.length} groups`;
 }

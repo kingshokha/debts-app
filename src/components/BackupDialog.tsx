@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { confirmAction, notify } from '../confirm';
-import { parseBackup } from '../store';
+import { type Backup, parseBackup } from '../store';
 import { colors } from '../theme';
-import type { Contact } from '../types';
+import type { Contact, Group } from '../types';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
 
 type Props = {
   visible: boolean;
   contacts: Contact[];
+  groups: Group[];
   onClose: () => void;
-  onImport: (contacts: Contact[]) => void;
+  onImport: (backup: Backup) => void;
 };
 
 /** Меню «☰»: резервная копия через «Поделиться» и восстановление из вставленного текста. */
-export function BackupDialog({ visible, contacts, onClose, onImport }: Props) {
+export function BackupDialog({ visible, contacts, groups, onClose, onImport }: Props) {
   const [importMode, setImportMode] = useState(false);
   const [text, setText] = useState('');
 
@@ -27,7 +28,7 @@ export function BackupDialog({ visible, contacts, onClose, onImport }: Props) {
 
   const exportData = async () => {
     onClose();
-    await Share.share({ message: JSON.stringify({ app: 'debts', version: 1, contacts }) });
+    await Share.share({ message: JSON.stringify({ app: 'debts', version: 2, contacts, groups }) });
   };
 
   const importData = () => {
@@ -38,7 +39,7 @@ export function BackupDialog({ visible, contacts, onClose, onImport }: Props) {
     }
     confirmAction(
       'Заменить все данные?',
-      `Текущие контакты (${contacts.length}) будут заменены на ${parsed.length} из копии.`,
+      `Текущие контакты (${contacts.length}) будут заменены на ${parsed.contacts.length} из копии.`,
       'Заменить',
       () => {
         onImport(parsed);

@@ -35,6 +35,12 @@
       ],
       "expo-sqlite"
     ],
-    "backgroundColor": "#303030"
+    "backgroundColor": "#303030",
+    "extra": {
+      "eas": {
+        "projectId": "4e84645e-25e0-472a-ac39-c5f5c642c576"
+      }
+    },
+    "owner": "kingshokha"
   }
 }

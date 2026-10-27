@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { notify } from '../confirm';
 import { evalExpression, withCurrentTime } from '../format';
+import { persistPhotos } from '../photos';
 import { colors } from '../theme';
 import type { Contact, Group } from '../types';
 import { AmountFields } from './AmountFields';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
 import { GroupSelect } from './GroupSelect';
-import { PhotoAttachments, usePhotoDraft } from './PhotoAttachments';
+import { PhotoAttachments } from './PhotoAttachments';
 
 type Props = {
   visible: boolean;
@@ -17,7 +19,15 @@ type Props = {
   suggestions: string[];
   onClose: () => void;
   onCreateGroup: (name: string) => string;
-  onSubmit: (name: string, amount: number, date: number, comment: string, groupId: string | null, photos: string[]) => void;
+  onSubmit: (
+    name: string,
+    amount: number,
+    date: number,
+    comment: string,
+    groupId: string | null,
+    photo: string | null,
+    passport: string[],
+  ) => void;
 };
 
 /** Поля сбрасываются за счёт нового `key` при каждом открытии (см. App). */
@@ -29,7 +39,9 @@ export function AddDialog(p: Props) {
   const [comment, setComment] = useState('');
   const [groupId, setGroupId] = useState(p.defaultGroupId);
   const [nameFocused, setNameFocused] = useState(false);
-  const draft = usePhotoDraft();
+  const [photo, setPhoto] = useState<string[]>([]);
+  const [passport, setPassport] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const amount = evalExpression(amountText);
   const valid = name.trim().length > 0 && amount !== null && amount > 0;
@@ -41,12 +53,20 @@ export function AddDialog(p: Props) {
     return contacts.filter((c) => c.name.toLowerCase().includes(q) && c.name.toLowerCase() !== q).slice(0, 4);
   }, [name, contacts]);
 
-  const submit = (sign: 1 | -1) => {
-    if (!valid) return;
-    draft.commit((photos) => {
-      p.onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim(), groupId, photos);
+  const submit = async (sign: 1 | -1) => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      // Снимки из пикера временные — переносим в папку приложения только при сохранении
+      const [savedPhoto] = await persistPhotos(photo);
+      const savedPassport = await persistPhotos(passport);
+      p.onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim(), groupId, savedPhoto ?? null, savedPassport);
       onClose();
-    });
+    } catch (e) {
+      console.warn(e);
+      notify('Не удалось сохранить фото');
+      setSaving(false);
+    }
   };
 
   return (
@@ -85,6 +105,9 @@ export function AddDialog(p: Props) {
       <Text style={styles.label}>Группа</Text>
       <GroupSelect groups={p.groups} value={groupId} onChange={setGroupId} onCreate={p.onCreateGroup} />
 
+      <PhotoAttachments label="Фото контакта" photos={photo} onChange={setPhoto} limit={1} crop />
+      <PhotoAttachments label="Паспорт" photos={passport} onChange={setPassport} />
+
       <View style={{ height: 24 }} />
       <AmountFields
         amountText={amountText}
@@ -95,13 +118,12 @@ export function AddDialog(p: Props) {
         onComment={setComment}
         suggestions={suggestions}
       />
-      <PhotoAttachments photos={draft.photos} onChange={draft.setPhotos} />
 
       <View style={dialogStyles.buttons}>
         <DialogButton label="ОТМЕНА" color={colors.teal} onPress={onClose} />
         <View style={styles.right}>
-          <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid || draft.saving} />
-          <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid || draft.saving} />
+          <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid || saving} />
+          <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid || saving} />
         </View>
       </View>
     </Dialog>

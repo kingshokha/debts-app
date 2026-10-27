@@ -5,14 +5,14 @@ import { balanceOf } from '../store';
 import { amountColor, colors } from '../theme';
 import type { Contact } from '../types';
 import { AmountFields } from './AmountFields';
+import { ContactHeader } from './ContactHeader';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
-import { PhotoAttachments, usePhotoDraft } from './PhotoAttachments';
 
 type Props = {
   contact: Contact | null;
   suggestions: string[];
   onClose: () => void;
-  onSubmit: (contactId: string, amount: number, date: number, comment: string, photos: string[]) => void;
+  onSubmit: (contactId: string, amount: number, date: number, comment: string) => void;
   onHistory: (contactId: string) => void;
 };
 
@@ -25,7 +25,6 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
   const [amountText, setAmountText] = useState('');
   const [date, setDate] = useState(() => new Date());
   const [comment, setComment] = useState('');
-  const draft = usePhotoDraft();
 
   const balance = balanceOf(contact);
   const amount = evalExpression(amountText);
@@ -36,17 +35,13 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
 
   const submit = (sign: 1 | -1) => {
     if (!valid) return;
-    draft.commit((photos) => {
-      onSubmit(contact.id, sign * amount!, withCurrentTime(date), comment.trim(), photos);
-      onClose();
-    });
+    onSubmit(contact.id, sign * amount!, withCurrentTime(date), comment.trim());
+    onClose();
   };
 
   return (
     <Dialog visible onClose={onClose} title="Изменение баланса">
-      <Text style={styles.name} numberOfLines={1}>
-        {contact.name}
-      </Text>
+      <ContactHeader contact={contact} />
       <View style={dialogStyles.divider} />
 
       <AmountFields
@@ -59,11 +54,10 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
         suggestions={suggestions}
         autoFocusAmount
       />
-      <PhotoAttachments photos={draft.photos} onChange={draft.setPhotos} />
 
       <View style={styles.actions}>
-        <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid || draft.saving} />
-        <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid || draft.saving} />
+        <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid} />
+        <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid} />
       </View>
       <View style={styles.preview}>
         <Text style={[styles.previewValue, { color: amountColor(ifMinus) }]}>{formatAmount(ifMinus)}</Text>
@@ -87,7 +81,6 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
 }
 
 const styles = StyleSheet.create({
-  name: { color: colors.text, fontSize: 15 },
   actions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 20 },
   preview: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 4 },
   previewValue: { fontSize: 14, minWidth: 80, textAlign: 'center' },

@@ -3,7 +3,6 @@ export type Operation = {
   amount: number; // > 0 — долг в плюс, < 0 — в минус
   date: number; // timestamp
   comment: string;
-  photos?: string[]; // uri файлов в папке приложения (в вебе — data:-uri)
 };
 
 export type Contact = {
@@ -12,6 +11,7 @@ export type Contact = {
   createdAt: number;
   groupId?: string | null; // нет — «Без группы»
   photo?: string | null; // uri файла в папке приложения (в вебе — data:-uri)
+  passport?: string[]; // фото страниц паспорта, uri как у photo
   operations: Operation[]; // всегда отсортированы по дате по возрастанию
 };
 

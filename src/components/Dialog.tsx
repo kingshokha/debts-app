@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme';
 
 type Props = {
@@ -15,8 +15,11 @@ export function Dialog({ visible, onClose, title, children }: Props) {
       <KeyboardAvoidingView style={styles.backdrop} behavior="padding">
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.box}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
-          {children}
+          {/* Прокрутка нужна высоким формам на маленьких экранах */}
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+            {children}
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -53,7 +56,9 @@ export const dialogStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: colors.backdrop, justifyContent: 'center', padding: 24 },
-  box: { backgroundColor: colors.dialog, borderRadius: 4, padding: 24, paddingBottom: 12, elevation: 12 },
+  box: { backgroundColor: colors.dialog, borderRadius: 4, elevation: 12, maxHeight: '100%' },
+  scroll: { flexGrow: 0 },
+  content: { padding: 24, paddingBottom: 12 },
   title: { color: colors.text, fontSize: 20, fontWeight: '600', marginBottom: 16 },
   button: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 2 },
   buttonText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },

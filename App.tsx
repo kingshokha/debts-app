@@ -12,6 +12,7 @@ import { Dialog } from './src/components/Dialog';
 import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
 import { NameDialog } from './src/components/NameDialog';
+import { PassportDialog } from './src/components/PassportDialog';
 import { PhotoDialog } from './src/components/PhotoDialog';
 import { PopupMenu } from './src/components/PopupMenu';
 import { SortDialog } from './src/components/SortDialog';
@@ -22,7 +23,7 @@ import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
 
-type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'group' | 'photo' | 'delete';
+type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'group' | 'photo' | 'passport' | 'delete';
 
 const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'payOff', label: 'Погасить всю сумму' },
@@ -32,6 +33,7 @@ const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'rename', label: 'Переименовать' },
   { action: 'group', label: 'Изменить группу' },
   { action: 'photo', label: 'Добавить фото' },
+  { action: 'passport', label: 'Фото паспорта' },
   { action: 'delete', label: 'Удалить контакт' },
 ];
 
@@ -74,6 +76,7 @@ function MainScreen() {
   const [groupContactId, setGroupContactId] = useState<string | null>(null);
   const [groupActions, setGroupActions] = useState<Group | null>(null);
   const [photoId, setPhotoId] = useState<string | null>(null);
+  const [passportId, setPassportId] = useState<string | null>(null);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 
@@ -153,9 +156,7 @@ function MainScreen() {
       case 'clear':
         return confirmAction(
           'Очистить историю?',
-          balanceOf(contact) || !contact.operations.some((op) => op.photos?.length)
-            ? 'Все операции будут заменены одной записью с текущим балансом.'
-            : 'Баланс нулевой — все операции и их фото будут удалены.',
+          'Все операции будут заменены одной записью с текущим балансом.',
           'Очистить',
           () => debts.clearHistory(contact.id),
           true,
@@ -166,6 +167,8 @@ function MainScreen() {
         return setGroupContactId(contact.id);
       case 'photo':
         return setPhotoId(contact.id);
+      case 'passport':
+        return setPassportId(contact.id);
       case 'delete':
         return confirmAction(
           'Удалить контакт?',
@@ -374,6 +377,7 @@ function MainScreen() {
         onSubmit={debts.setContactGroup}
       />
       <PhotoDialog contact={byId(photoId)} onClose={() => setPhotoId(null)} onPick={choosePhoto} onRemove={removePhoto} />
+      <PassportDialog contact={byId(passportId)} onClose={() => setPassportId(null)} onSubmit={debts.setPassport} />
       <Dialog visible={groupActions !== null} onClose={() => setGroupActions(null)} title={groupActions?.name}>
         {(['rename', 'delete'] as const).map((action) => (
           <Pressable

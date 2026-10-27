@@ -21,18 +21,8 @@ export const lastCommentOf = (c: Contact) => c.operations.findLast((op) => op.co
 
 const insertOp = (ops: Operation[], op: Operation) => [...ops, op].sort((a, b) => a.date - b.date);
 
-const newOp = (amount: number, date: number, comment: string, photos: string[] = []): Operation => ({
-  id: newId(),
-  amount,
-  date,
-  comment,
-  ...(photos.length ? { photos } : {}),
-});
-
-const opPhotos = (ops: Operation[]) => ops.flatMap((op) => op.photos ?? []);
-
-/** Все файлы фото контакта: его собственное и фото операций. */
-export const photosOf = (c: Contact) => [c.photo, ...opPhotos(c.operations)];
+/** Все файлы фото контакта: его фото и фото паспорта. */
+export const photosOf = (c: Contact) => [c.photo, ...(c.passport ?? [])];
 
 export type Backup = { contacts: Contact[]; groups: Group[] };
 
@@ -53,15 +43,13 @@ export function parseBackup(text: string): Backup | null {
       createdAt: Number(c.createdAt ?? Date.now()),
       groupId: c.groupId && groupIds.has(String(c.groupId)) ? String(c.groupId) : null,
       photo: typeof c.photo === 'string' ? c.photo : null,
+      passport: Array.isArray(c.passport) ? c.passport.filter((uri: unknown) => typeof uri === 'string') : [],
       operations: (Array.isArray(c.operations) ? c.operations : [])
         .map((op: any) => ({
           id: String(op.id ?? newId()),
           amount: Number(op.amount) || 0,
           date: Number(op.date ?? Date.now()),
           comment: String(op.comment ?? ''),
-          ...(Array.isArray(op.photos) && op.photos.length
-            ? { photos: op.photos.filter((uri: unknown) => typeof uri === 'string') }
-            : {}),
         }))
         .sort((a: Operation, b: Operation) => a.date - b.date),
     }));
@@ -113,32 +101,49 @@ export function useDebts() {
   }, []);
 
   const addOperation = useCallback(
-    (contactId: string, amount: number, date: number, comment: string, photos: string[]) =>
-      update(contactId, (c) => ({ ...c, operations: insertOp(c.operations, newOp(amount, date, comment, photos)) })),
+    (contactId: string, amount: number, date: number, comment: string) =>
+      update(contactId, (c) => ({ ...c, operations: insertOp(c.operations, { id: newId(), amount, date, comment }) })),
     [update],
   );
 
   /**
    * Новый контакт; если контакт с таким именем уже есть — операция добавляется к нему,
-   * а группа проставляется, только если у него группы ещё не было.
+   * группа и фото проставляются, только если их ещё не было, а фото паспорта дописываются.
    */
   const addContact = useCallback(
-    (name: string, amount: number, date: number, comment: string, groupId: string | null, photos: string[]) => {
+    (
+      name: string,
+      amount: number,
+      date: number,
+      comment: string,
+      groupId: string | null,
+      photo: string | null,
+      passport: string[],
+    ) => {
       const trimmed = name.trim();
+      const sameName = (c: Contact) => c.name.trim().toLowerCase() === trimmed.toLowerCase();
+      // У существующего контакта своё фото остаётся — новое не понадобится
+      if (photo && contacts.find(sameName)?.photo) deletePhotos([photo]);
       setContacts((list) => {
-        const op = newOp(amount, date, comment, photos);
-        const existing = list.find((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase());
+        const op: Operation = { id: newId(), amount, date, comment };
+        const existing = list.find(sameName);
         if (existing) {
           return list.map((c) =>
             c.id === existing.id
-              ? { ...c, groupId: c.groupId ?? groupId, operations: insertOp(c.operations, op) }
+              ? {
+                  ...c,
+                  groupId: c.groupId ?? groupId,
+                  photo: c.photo ?? photo,
+                  passport: [...(c.passport ?? []), ...passport],
+                  operations: insertOp(c.operations, op),
+                }
               : c,
           );
         }
-        return [...list, { id: newId(), name: trimmed, createdAt: Date.now(), groupId, operations: [op] }];
+        return [...list, { id: newId(), name: trimmed, createdAt: Date.now(), groupId, photo, passport, operations: [op] }];
       });
     },
-    [],
+    [contacts],
   );
 
   const payOff = useCallback(
@@ -146,26 +151,20 @@ export function useDebts() {
       update(id, (c) => {
         const balance = balanceOf(c);
         if (!balance) return c;
-        return { ...c, operations: insertOp(c.operations, newOp(-balance, Date.now(), 'Погашение')) };
+        return { ...c, operations: insertOp(c.operations, { id: newId(), amount: -balance, date: Date.now(), comment: 'Погашение' }) };
       }),
     [update],
   );
 
-  /**
-   * Схлопывает историю в одну операцию с текущим балансом; фото операций переходят в неё.
-   * При нулевом балансе операций не остаётся, и фото удаляются.
-   */
+  /** Схлопывает историю в одну операцию с текущим балансом. */
   const clearHistory = useCallback(
-    (id: string) => {
-      const contact = contacts.find((c) => c.id === id);
-      if (contact && !balanceOf(contact)) deletePhotos(opPhotos(contact.operations));
+    (id: string) =>
       update(id, (c) => {
         const balance = balanceOf(c);
-        const operations = balance ? [newOp(balance, Date.now(), lastCommentOf(c), opPhotos(c.operations))] : [];
+        const operations = balance ? [{ id: newId(), amount: balance, date: Date.now(), comment: lastCommentOf(c) }] : [];
         return { ...c, operations };
-      });
-    },
-    [contacts, update],
+      }),
+    [update],
   );
 
   const rename = useCallback((id: string, name: string) => update(id, (c) => ({ ...c, name: name.trim() })), [update]);
@@ -185,6 +184,16 @@ export function useDebts() {
     [contacts, update],
   );
 
+  /** Заменяет фото паспорта; убранные файлы удаляются. */
+  const setPassport = useCallback(
+    (id: string, passport: string[]) => {
+      const kept = new Set(passport);
+      deletePhotos((contacts.find((c) => c.id === id)?.passport ?? []).filter((uri) => !kept.has(uri)));
+      update(id, (c) => ({ ...c, passport }));
+    },
+    [contacts, update],
+  );
+
   const removeContact = useCallback(
     (id: string) => {
       const contact = contacts.find((c) => c.id === id);
@@ -194,36 +203,19 @@ export function useDebts() {
     [contacts],
   );
 
-  const findOp = useCallback(
-    (contactId: string, opId: string) => contacts.find((c) => c.id === contactId)?.operations.find((op) => op.id === opId),
-    [contacts],
-  );
-
   const removeOperation = useCallback(
-    (contactId: string, opId: string) => {
-      deletePhotos(findOp(contactId, opId)?.photos ?? []);
-      update(contactId, (c) => ({ ...c, operations: c.operations.filter((op) => op.id !== opId) }));
-    },
-    [findOp, update],
+    (contactId: string, opId: string) =>
+      update(contactId, (c) => ({ ...c, operations: c.operations.filter((op) => op.id !== opId) })),
+    [update],
   );
 
-  /** Обновляет операцию; фото, убранные при редактировании, удаляются с устройства. */
   const updateOperation = useCallback(
-    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) => {
-      const kept = new Set(patch.photos ?? []);
-      deletePhotos((findOp(contactId, opId)?.photos ?? []).filter((uri) => !kept.has(uri)));
+    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) =>
       update(contactId, (c) => ({
         ...c,
-        operations: c.operations
-          .map((op) => {
-            if (op.id !== opId) return op;
-            const { photos, ...rest } = { ...op, ...patch };
-            return photos?.length ? { ...rest, photos } : rest;
-          })
-          .sort((a, b) => a.date - b.date),
-      }));
-    },
-    [findOp, update],
+        operations: c.operations.map((op) => (op.id === opId ? { ...op, ...patch } : op)).sort((a, b) => a.date - b.date),
+      })),
+    [update],
   );
 
   /** Создаёт группу (или возвращает существующую с таким же именем) и отдаёт её id. */
@@ -279,6 +271,7 @@ export function useDebts() {
     rename,
     setContactGroup,
     setPhoto,
+    setPassport,
     removeContact,
     removeOperation,
     updateOperation,

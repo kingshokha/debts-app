@@ -2,13 +2,18 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { notify } from '../confirm';
-import { type PhotoSource, persistPhotos, pickImages } from '../photos';
+import { type PhotoSource, pickImages } from '../photos';
 import { colors } from '../theme';
 import { PhotoViewer } from './PhotoViewer';
 
 type Props = {
+  label: string;
   photos: string[];
   onChange: (photos: string[]) => void;
+  /** Сколько фото можно добавить; когда лимит достигнут, кнопки добавления скрываются. */
+  limit?: number;
+  /** Квадратная обрезка (для фото контакта); выбор из галереи тогда по одному. */
+  crop?: boolean;
 };
 
 const SOURCES: { source: PhotoSource; label: string; icon: 'camera' | 'image-multiple' }[] = [
@@ -16,17 +21,17 @@ const SOURCES: { source: PhotoSource; label: string; icon: 'camera' | 'image-mul
   { source: 'library', label: 'Галерея', icon: 'image-multiple' },
 ];
 
-/** Фото к операции: миниатюры с удалением и кнопки «Камера» / «Галерея». */
-export function PhotoAttachments({ photos, onChange }: Props) {
+/** Миниатюры с удалением и кнопки «Камера» / «Галерея». Новые снимки — временные, их сохраняет persistPhotos. */
+export function PhotoAttachments({ label, photos, onChange, limit = Infinity, crop = false }: Props) {
   const [busy, setBusy] = useState(false);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   const add = async (source: PhotoSource) => {
     setBusy(true);
     try {
-      const picked = await pickImages(source, { multiple: true });
+      const picked = await pickImages(source, { crop, multiple: limit > 1 });
       if (picked === 'denied') notify('Нет доступа к камере', 'Разрешите приложению доступ к камере в настройках телефона.');
-      else if (picked.length) onChange([...photos, ...picked]);
+      else if (picked.length) onChange([...photos, ...picked].slice(0, limit));
     } catch (e) {
       console.warn(e);
       notify('Не удалось получить фото', source === 'camera' ? 'Камера недоступна.' : undefined);
@@ -36,12 +41,13 @@ export function PhotoAttachments({ photos, onChange }: Props) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View>
+      <Text style={styles.label}>{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
         {photos.map((uri, i) => (
           // Ключ по индексу: в вебе одна и та же картинка даёт одинаковый data:-uri
           <Pressable key={i} onPress={() => setViewIndex(i)}>
-            <Image source={{ uri }} style={styles.thumb} />
+            <Image source={{ uri }} style={[styles.thumb, crop && styles.round]} />
             <Pressable
               style={styles.remove}
               hitSlop={6}
@@ -56,49 +62,27 @@ export function PhotoAttachments({ photos, onChange }: Props) {
           <View style={styles.tile}>
             <ActivityIndicator color={colors.accent} />
           </View>
-        ) : (
-          SOURCES.map(({ source, label, icon }) => (
+        ) : photos.length < limit ? (
+          SOURCES.map(({ source, label: text, icon }) => (
             <Pressable key={source} style={styles.tile} onPress={() => add(source)}>
               <MaterialCommunityIcons name={icon} size={24} color={colors.accent} />
-              <Text style={styles.tileText}>{label}</Text>
+              <Text style={styles.tileText}>{text}</Text>
             </Pressable>
           ))
-        )}
+        ) : null}
       </ScrollView>
       <PhotoViewer photos={photos} index={viewIndex} onClose={() => setViewIndex(null)} />
     </View>
   );
 }
 
-/**
- * Черновик фото в диалоге. commit копирует новые снимки в папку приложения
- * и передаёт итоговый список в onSaved; повторные нажатия, пока идёт сохранение, игнорируются.
- */
-export function usePhotoDraft(initial: string[] = []) {
-  const [photos, setPhotos] = useState(initial);
-  const [saving, setSaving] = useState(false);
-
-  const commit = async (onSaved: (photos: string[]) => void) => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      onSaved(await persistPhotos(photos));
-    } catch (e) {
-      console.warn(e);
-      notify('Не удалось сохранить фото');
-      setSaving(false);
-    }
-  };
-
-  return { photos, setPhotos, saving, commit };
-}
-
 const THUMB = 60;
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 16 },
+  label: { color: colors.muted, fontSize: 13, marginTop: 18, marginBottom: 2 },
   strip: { gap: 8, paddingTop: 6, paddingRight: 6 },
   thumb: { width: THUMB, height: THUMB, borderRadius: 4, backgroundColor: colors.bg },
+  round: { borderRadius: THUMB / 2 },
   remove: {
     position: 'absolute',
     top: -6,

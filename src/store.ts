@@ -4,6 +4,8 @@ import type { Backup } from './backup';
 import { notify } from './confirm';
 import * as db from './db';
 import { newId } from './id';
+import type { DebtBook } from './import/debtBook';
+import { applyPlan, type ImportPlan, planImport } from './import/merge';
 import { deletePhotos } from './photos';
 import type { Contact, Group, Operation, SortSettings, ViewSettings } from './types';
 
@@ -43,6 +45,7 @@ function usePersist(key: string, value: unknown, loaded: boolean) {
 export function useDebts() {
   const [contacts, setContactsState] = useState<Contact[]>([]);
   const [groups, setGroupsState] = useState<Group[]>([]);
+  const [templates, setTemplatesState] = useState<string[]>([]);
   const [sort, setSort] = useState<SortSettings>(DEFAULT_SORT);
   const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
   const [loaded, setLoaded] = useState(false);
@@ -50,6 +53,7 @@ export function useDebts() {
   // Актуальные данные для действий: из них считается и новое состояние, и запись в базу
   const contactsRef = useRef(contacts);
   const groupsRef = useRef(groups);
+  const templatesRef = useRef(templates);
 
   const setContacts = useCallback((next: Contact[]) => {
     contactsRef.current = next;
@@ -59,6 +63,11 @@ export function useDebts() {
   const setGroups = useCallback((next: Group[]) => {
     groupsRef.current = next;
     setGroupsState(next);
+  }, []);
+
+  const setTemplates = useCallback((next: string[]) => {
+    templatesRef.current = next;
+    setTemplatesState(next);
   }, []);
 
   useEffect(() => {
@@ -71,6 +80,7 @@ export function useDebts() {
         ]);
         setContacts(stored.contacts);
         setGroups(stored.groups);
+        setTemplates(stored.templates);
         if (sortData) setSort({ ...DEFAULT_SORT, ...JSON.parse(sortData) });
         if (viewData) setView({ ...DEFAULT_VIEW, ...JSON.parse(viewData) });
       } catch (e) {
@@ -80,7 +90,7 @@ export function useDebts() {
         setLoaded(true);
       }
     })();
-  }, [setContacts, setGroups]);
+  }, [setContacts, setGroups, setTemplates]);
 
   usePersist(SORT_KEY, sort, loaded);
   usePersist(VIEW_KEY, view, loaded);
@@ -292,10 +302,33 @@ export function useDebts() {
     [setContacts, setGroups],
   );
 
+  /** Что даст импорт файла «долговой книги» с текущими данными: новое, дубли, статистика. */
+  const planDebtBookImport = useCallback(
+    (book: DebtBook) =>
+      planImport(book, { contacts: contactsRef.current, groups: groupsRef.current, templates: templatesRef.current }),
+    [],
+  );
+
+  /** Записывает импорт одной транзакцией; состояние меняется, только если запись прошла. */
+  const importDebtBook = useCallback(
+    async (plan: ImportPlan, onProgress?: (fraction: number) => void) => {
+      const current = { contacts: contactsRef.current, groups: groupsRef.current, templates: templatesRef.current };
+      const next = applyPlan(current, plan);
+      await db.applyImport(plan, next.groups, current.templates.length, onProgress);
+      setContacts(next.contacts);
+      setGroups(next.groups);
+      setTemplates(next.templates);
+    },
+    [setContacts, setGroups, setTemplates],
+  );
+
   return {
     loaded,
     contacts,
     groups,
+    templates,
+    planDebtBookImport,
+    importDebtBook,
     sort,
     setSort,
     view,

@@ -8,6 +8,7 @@ import { BackupDialog } from './src/components/BackupDialog';
 import { BalanceDialog } from './src/components/BalanceDialog';
 import { ContactGroupDialog } from './src/components/ContactGroupDialog';
 import { ContactRow } from './src/components/ContactRow';
+import { DebtBookImportDialog } from './src/components/DebtBookImportDialog';
 import { Dialog } from './src/components/Dialog';
 import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
@@ -18,6 +19,7 @@ import { PopupMenu } from './src/components/PopupMenu';
 import { SortDialog } from './src/components/SortDialog';
 import { confirmAction, notify } from './src/confirm';
 import { formatAmount } from './src/format';
+import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
@@ -61,7 +63,7 @@ export default function App() {
 function MainScreen() {
   const insets = useSafeAreaInsets();
   const debts = useDebts();
-  const { contacts, groups, sort, view } = debts;
+  const { contacts, groups, templates, sort, view } = debts;
 
   const [search, setSearch] = useState<string | null>(null); // null — поиск закрыт
   const [addOpen, setAddOpen] = useState(false);
@@ -77,6 +79,7 @@ function MainScreen() {
   const [groupActions, setGroupActions] = useState<Group | null>(null);
   const [photoId, setPhotoId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<PickedText | null>(null);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 
@@ -128,12 +131,13 @@ function MainScreen() {
     return list.sort((a, b) => dir * cmp(a, b));
   }, [scope, sort, search]);
 
-  // Прошлые комментарии для выпадающего списка: свежие сверху, без повторов
+  // Выпадающий список комментариев: прошлые (свежие сверху), затем шаблоны заметок; без повторов
   const suggestions = useMemo(() => {
     const ops = contacts.flatMap((c) => c.operations).filter((op) => op.comment);
     ops.sort((a, b) => b.date - a.date);
-    return [...new Set(ops.map((op) => op.comment))].slice(0, 30);
-  }, [contacts]);
+    const recent = [...new Set(ops.map((op) => op.comment))].slice(0, 30);
+    return [...new Set([...recent, ...templates])];
+  }, [contacts, templates]);
 
   const onRowPress = useCallback((id: string) => setBalanceId(id), []);
   const onRowMenu = useCallback((id: string, anchor: { x: number; y: number; height: number }) => setMenu({ id, anchor }), []);
@@ -205,6 +209,19 @@ function MainScreen() {
   const openAdd = () => {
     setDialogKey((k) => k + 1);
     setAddOpen(true);
+  };
+
+  // Меню «☰» остаётся открытым, пока выбирается файл: так системный выбор файла не конфликтует с закрытием окна
+  const importFromFile = async () => {
+    try {
+      const file = await pickTextFile();
+      if (!file) return;
+      setBackupOpen(false);
+      setImportFile(file);
+    } catch (e) {
+      console.warn(e);
+      notify('Не удалось открыть файл', String((e as Error)?.message ?? e));
+    }
   };
 
   const openBackup = () => {
@@ -403,6 +420,13 @@ function MainScreen() {
         groups={groups}
         onClose={() => setBackupOpen(false)}
         onImport={debts.importBackup}
+        onImportFile={importFromFile}
+      />
+      <DebtBookImportDialog
+        file={importFile}
+        onClose={() => setImportFile(null)}
+        onPlan={debts.planDebtBookImport}
+        onImport={debts.importDebtBook}
       />
     </View>
   );

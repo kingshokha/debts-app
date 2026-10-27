@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { openDatabaseAsync, type SQLiteBindValue, type SQLiteDatabase } from 'expo-sqlite';
 import { type Backup, normalizeBackup } from './backup';
+import type { ImportPlan } from './import/merge';
 import type { Contact, Group, Operation } from './types';
 
 // Хранилище — SQLite. Суммы — целые дирамы (100 = 1 сомони).
@@ -223,6 +224,40 @@ export const removeGroup = (id: string, groups: Group[]) =>
     await db.runAsync('UPDATE contacts SET group_id = NULL WHERE group_id = ?', [id]);
     await db.runAsync('DELETE FROM groups');
     await insertMany(db, 'groups', GROUP_COLUMNS, groups.map(groupRow));
+  });
+
+/**
+ * Записывает импорт одной транзакцией: при любой ошибке не остаётся ничего.
+ * groups — итоговый список групп; templatesBefore — сколько шаблонов было (для их порядка).
+ */
+export const applyImport = (plan: ImportPlan, groups: Group[], templatesBefore: number, onProgress?: (fraction: number) => void) =>
+  transaction(async (db) => {
+    const operations = [
+      ...operationRowsOf(plan.newContacts),
+      ...plan.addedOperations.map(({ contactId, operation }) => operationRow(contactId, operation)),
+    ];
+    const total = Math.max(1, plan.newContacts.length + operations.length);
+    let done = 0;
+    const report = (n: number) => {
+      done += n;
+      onProgress?.(done / total);
+    };
+
+    if (plan.newGroups.length) {
+      await db.runAsync('DELETE FROM groups');
+      await insertMany(db, 'groups', GROUP_COLUMNS, groups.map(groupRow));
+    }
+    await insertMany(db, 'contacts', CONTACT_COLUMNS, plan.newContacts.map(contactRow), report);
+    await insertMany(db, 'operations', OPERATION_COLUMNS, operations, report);
+    for (const { contactId, groupId } of plan.groupAssignments) {
+      await db.runAsync('UPDATE contacts SET group_id = ? WHERE id = ?', [groupId, contactId]);
+    }
+    await insertMany(
+      db,
+      'templates',
+      ['text', 'position'],
+      plan.newTemplates.map((text, i) => [text, templatesBefore + i]),
+    );
   });
 
 // Раньше всё лежало одной JSON-строкой в AsyncStorage, а суммы были в сомони

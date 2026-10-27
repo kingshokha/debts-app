@@ -12,13 +12,15 @@ type Props = {
   groups: Group[];
   onClose: () => void;
   onImport: (backup: Backup) => void;
+  /** «Импорт из файла»: выбор .txt резервной копии долговой книги. */
+  onImportFile: () => void;
 };
 
 /**
  * Меню «☰»: резервная копия через «Поделиться» и восстановление из вставленного текста.
  * Состояние сбрасывается за счёт нового `key` при каждом открытии (см. App).
  */
-export function BackupDialog({ visible, contacts, groups, onClose, onImport }: Props) {
+export function BackupDialog({ visible, contacts, groups, onClose, onImport, onImportFile }: Props) {
   const [importMode, setImportMode] = useState(false);
   const [text, setText] = useState('');
 
@@ -72,6 +74,10 @@ export function BackupDialog({ visible, contacts, groups, onClose, onImport }: P
           <Pressable style={styles.item} onPress={() => setImportMode(true)}>
             <Text style={styles.text}>Импорт из текста</Text>
             <Text style={styles.hint}>Восстановить данные из ранее сохранённой копии</Text>
+          </Pressable>
+          <Pressable style={styles.item} onPress={onImportFile}>
+            <Text style={styles.text}>Импорт из файла (.txt)</Text>
+            <Text style={styles.hint}>Резервная копия «долговой книги»: клиенты и вся история. Дубли пропускаются</Text>
           </Pressable>
         </>
       )}

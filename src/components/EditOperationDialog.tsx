@@ -6,6 +6,7 @@ import { colors } from '../theme';
 import type { Contact, Operation } from '../types';
 import { AmountFields } from './AmountFields';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
+import { PhotoAttachments, usePhotoDraft } from './PhotoAttachments';
 
 type Props = {
   contact: Contact;
@@ -25,18 +26,22 @@ function EditOperationForm({ contact, operation, suggestions, onClose, onSubmit 
   const [date, setDate] = useState(() => new Date(operation.date));
   const [comment, setComment] = useState(operation.comment);
   const [sign, setSign] = useState<1 | -1>(operation.amount < 0 ? -1 : 1);
+  const draft = usePhotoDraft(operation.photos);
 
   const amount = evalExpression(amountText);
   const valid = amount !== null && amount > 0;
 
   const save = () => {
     if (!valid) return;
-    onSubmit(contact.id, operation.id, {
-      amount: sign * amount!,
-      date: withTimeOf(date, operation.date),
-      comment: comment.trim(),
+    draft.commit((photos) => {
+      onSubmit(contact.id, operation.id, {
+        amount: sign * amount!,
+        date: withTimeOf(date, operation.date),
+        comment: comment.trim(),
+        photos,
+      });
+      onClose();
     });
-    onClose();
   };
 
   return (
@@ -56,6 +61,7 @@ function EditOperationForm({ contact, operation, suggestions, onClose, onSubmit 
         suggestions={suggestions}
         autoFocusAmount
       />
+      <PhotoAttachments photos={draft.photos} onChange={draft.setPhotos} />
 
       <View style={styles.radios}>
         <Radio label="Минус" color={colors.red} selected={sign === -1} onPress={() => setSign(-1)} />
@@ -64,7 +70,7 @@ function EditOperationForm({ contact, operation, suggestions, onClose, onSubmit 
 
       <View style={[dialogStyles.buttons, { justifyContent: 'flex-end', gap: 16 }]}>
         <DialogButton label="ОТМЕНА" color={colors.teal} onPress={onClose} />
-        <DialogButton label="СОХРАНИТЬ" color={colors.teal} onPress={save} disabled={!valid} />
+        <DialogButton label="СОХРАНИТЬ" color={colors.teal} onPress={save} disabled={!valid || draft.saving} />
       </View>
     </Dialog>
   );

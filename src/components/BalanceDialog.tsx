@@ -6,12 +6,13 @@ import { amountColor, colors } from '../theme';
 import type { Contact } from '../types';
 import { AmountFields } from './AmountFields';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
+import { PhotoAttachments, usePhotoDraft } from './PhotoAttachments';
 
 type Props = {
   contact: Contact | null;
   suggestions: string[];
   onClose: () => void;
-  onSubmit: (contactId: string, amount: number, date: number, comment: string) => void;
+  onSubmit: (contactId: string, amount: number, date: number, comment: string, photos: string[]) => void;
   onHistory: (contactId: string) => void;
 };
 
@@ -24,6 +25,7 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
   const [amountText, setAmountText] = useState('');
   const [date, setDate] = useState(() => new Date());
   const [comment, setComment] = useState('');
+  const draft = usePhotoDraft();
 
   const balance = balanceOf(contact);
   const amount = evalExpression(amountText);
@@ -34,8 +36,10 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
 
   const submit = (sign: 1 | -1) => {
     if (!valid) return;
-    onSubmit(contact.id, sign * amount!, withCurrentTime(date), comment.trim());
-    onClose();
+    draft.commit((photos) => {
+      onSubmit(contact.id, sign * amount!, withCurrentTime(date), comment.trim(), photos);
+      onClose();
+    });
   };
 
   return (
@@ -55,10 +59,11 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
         suggestions={suggestions}
         autoFocusAmount
       />
+      <PhotoAttachments photos={draft.photos} onChange={draft.setPhotos} />
 
       <View style={styles.actions}>
-        <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid} />
-        <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid} />
+        <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid || draft.saving} />
+        <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid || draft.saving} />
       </View>
       <View style={styles.preview}>
         <Text style={[styles.previewValue, { color: amountColor(ifMinus) }]}>{formatAmount(ifMinus)}</Text>

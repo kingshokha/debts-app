@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
-import { deletePhoto } from './photos';
+import { deletePhotos } from './photos';
 import type { Contact, Group, Operation, SortSettings, ViewSettings } from './types';
 
 const DATA_KEY = 'debts/contacts/v1';
@@ -20,6 +20,19 @@ export const lastDateOf = (c: Contact) => c.operations.at(-1)?.date ?? c.created
 export const lastCommentOf = (c: Contact) => c.operations.findLast((op) => op.comment)?.comment ?? '';
 
 const insertOp = (ops: Operation[], op: Operation) => [...ops, op].sort((a, b) => a.date - b.date);
+
+const newOp = (amount: number, date: number, comment: string, photos: string[] = []): Operation => ({
+  id: newId(),
+  amount,
+  date,
+  comment,
+  ...(photos.length ? { photos } : {}),
+});
+
+const opPhotos = (ops: Operation[]) => ops.flatMap((op) => op.photos ?? []);
+
+/** Все файлы фото контакта: его собственное и фото операций. */
+export const photosOf = (c: Contact) => [c.photo, ...opPhotos(c.operations)];
 
 export type Backup = { contacts: Contact[]; groups: Group[] };
 
@@ -46,6 +59,9 @@ export function parseBackup(text: string): Backup | null {
           amount: Number(op.amount) || 0,
           date: Number(op.date ?? Date.now()),
           comment: String(op.comment ?? ''),
+          ...(Array.isArray(op.photos) && op.photos.length
+            ? { photos: op.photos.filter((uri: unknown) => typeof uri === 'string') }
+            : {}),
         }))
         .sort((a: Operation, b: Operation) => a.date - b.date),
     }));
@@ -97,8 +113,8 @@ export function useDebts() {
   }, []);
 
   const addOperation = useCallback(
-    (contactId: string, amount: number, date: number, comment: string) =>
-      update(contactId, (c) => ({ ...c, operations: insertOp(c.operations, { id: newId(), amount, date, comment }) })),
+    (contactId: string, amount: number, date: number, comment: string, photos: string[]) =>
+      update(contactId, (c) => ({ ...c, operations: insertOp(c.operations, newOp(amount, date, comment, photos)) })),
     [update],
   );
 
@@ -107,10 +123,10 @@ export function useDebts() {
    * а группа проставляется, только если у него группы ещё не было.
    */
   const addContact = useCallback(
-    (name: string, amount: number, date: number, comment: string, groupId: string | null) => {
+    (name: string, amount: number, date: number, comment: string, groupId: string | null, photos: string[]) => {
       const trimmed = name.trim();
       setContacts((list) => {
-        const op: Operation = { id: newId(), amount, date, comment };
+        const op = newOp(amount, date, comment, photos);
         const existing = list.find((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase());
         if (existing) {
           return list.map((c) =>
@@ -130,20 +146,26 @@ export function useDebts() {
       update(id, (c) => {
         const balance = balanceOf(c);
         if (!balance) return c;
-        return { ...c, operations: insertOp(c.operations, { id: newId(), amount: -balance, date: Date.now(), comment: 'Погашение' }) };
+        return { ...c, operations: insertOp(c.operations, newOp(-balance, Date.now(), 'Погашение')) };
       }),
     [update],
   );
 
-  /** Схлопывает историю в одну операцию с текущим балансом. */
+  /**
+   * Схлопывает историю в одну операцию с текущим балансом; фото операций переходят в неё.
+   * При нулевом балансе операций не остаётся, и фото удаляются.
+   */
   const clearHistory = useCallback(
-    (id: string) =>
+    (id: string) => {
+      const contact = contacts.find((c) => c.id === id);
+      if (contact && !balanceOf(contact)) deletePhotos(opPhotos(contact.operations));
       update(id, (c) => {
         const balance = balanceOf(c);
-        const operations = balance ? [{ id: newId(), amount: balance, date: Date.now(), comment: lastCommentOf(c) }] : [];
+        const operations = balance ? [newOp(balance, Date.now(), lastCommentOf(c), opPhotos(c.operations))] : [];
         return { ...c, operations };
-      }),
-    [update],
+      });
+    },
+    [contacts, update],
   );
 
   const rename = useCallback((id: string, name: string) => update(id, (c) => ({ ...c, name: name.trim() })), [update]);
@@ -157,7 +179,7 @@ export function useDebts() {
   const setPhoto = useCallback(
     (id: string, photo: string | null) => {
       const old = contacts.find((c) => c.id === id)?.photo;
-      if (old !== photo) deletePhoto(old);
+      if (old !== photo) deletePhotos([old]);
       update(id, (c) => ({ ...c, photo }));
     },
     [contacts, update],
@@ -165,25 +187,43 @@ export function useDebts() {
 
   const removeContact = useCallback(
     (id: string) => {
-      deletePhoto(contacts.find((c) => c.id === id)?.photo);
+      const contact = contacts.find((c) => c.id === id);
+      if (contact) deletePhotos(photosOf(contact));
       setContacts((list) => list.filter((c) => c.id !== id));
     },
     [contacts],
   );
 
-  const removeOperation = useCallback(
-    (contactId: string, opId: string) =>
-      update(contactId, (c) => ({ ...c, operations: c.operations.filter((op) => op.id !== opId) })),
-    [update],
+  const findOp = useCallback(
+    (contactId: string, opId: string) => contacts.find((c) => c.id === contactId)?.operations.find((op) => op.id === opId),
+    [contacts],
   );
 
+  const removeOperation = useCallback(
+    (contactId: string, opId: string) => {
+      deletePhotos(findOp(contactId, opId)?.photos ?? []);
+      update(contactId, (c) => ({ ...c, operations: c.operations.filter((op) => op.id !== opId) }));
+    },
+    [findOp, update],
+  );
+
+  /** Обновляет операцию; фото, убранные при редактировании, удаляются с устройства. */
   const updateOperation = useCallback(
-    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) =>
+    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) => {
+      const kept = new Set(patch.photos ?? []);
+      deletePhotos((findOp(contactId, opId)?.photos ?? []).filter((uri) => !kept.has(uri)));
       update(contactId, (c) => ({
         ...c,
-        operations: c.operations.map((op) => (op.id === opId ? { ...op, ...patch } : op)).sort((a, b) => a.date - b.date),
-      })),
-    [update],
+        operations: c.operations
+          .map((op) => {
+            if (op.id !== opId) return op;
+            const { photos, ...rest } = { ...op, ...patch };
+            return photos?.length ? { ...rest, photos } : rest;
+          })
+          .sort((a, b) => a.date - b.date),
+      }));
+    },
+    [findOp, update],
   );
 
   /** Создаёт группу (или возвращает существующую с таким же именем) и отдаёт её id. */
@@ -214,8 +254,8 @@ export function useDebts() {
   const importBackup = useCallback(
     (backup: Backup) => {
       // Фото, на которые копия больше не ссылается, удаляем, чтобы не копились файлы
-      const kept = new Set(backup.contacts.map((c) => c.photo));
-      for (const c of contacts) if (!kept.has(c.photo)) deletePhoto(c.photo);
+      const kept = new Set(backup.contacts.flatMap(photosOf));
+      deletePhotos(contacts.flatMap(photosOf).filter((uri) => !kept.has(uri)));
       setGroups(backup.groups);
       setContacts(backup.contacts);
       setView((v) => ({ ...v, groupId: null }));

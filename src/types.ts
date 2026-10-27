@@ -3,6 +3,7 @@ export type Operation = {
   amount: number; // > 0 — долг в плюс, < 0 — в минус
   date: number; // timestamp
   comment: string;
+  photos?: string[]; // uri файлов в папке приложения (в вебе — data:-uri)
 };
 
 export type Contact = {

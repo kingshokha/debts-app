@@ -6,6 +6,7 @@ import type { Contact, Group } from '../types';
 import { AmountFields } from './AmountFields';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
 import { GroupSelect } from './GroupSelect';
+import { PhotoAttachments, usePhotoDraft } from './PhotoAttachments';
 
 type Props = {
   visible: boolean;
@@ -16,7 +17,7 @@ type Props = {
   suggestions: string[];
   onClose: () => void;
   onCreateGroup: (name: string) => string;
-  onSubmit: (name: string, amount: number, date: number, comment: string, groupId: string | null) => void;
+  onSubmit: (name: string, amount: number, date: number, comment: string, groupId: string | null, photos: string[]) => void;
 };
 
 /** Поля сбрасываются за счёт нового `key` при каждом открытии (см. App). */
@@ -28,6 +29,7 @@ export function AddDialog(p: Props) {
   const [comment, setComment] = useState('');
   const [groupId, setGroupId] = useState(p.defaultGroupId);
   const [nameFocused, setNameFocused] = useState(false);
+  const draft = usePhotoDraft();
 
   const amount = evalExpression(amountText);
   const valid = name.trim().length > 0 && amount !== null && amount > 0;
@@ -41,8 +43,10 @@ export function AddDialog(p: Props) {
 
   const submit = (sign: 1 | -1) => {
     if (!valid) return;
-    p.onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim(), groupId);
-    onClose();
+    draft.commit((photos) => {
+      p.onSubmit(name, sign * amount!, withCurrentTime(date), comment.trim(), groupId, photos);
+      onClose();
+    });
   };
 
   return (
@@ -91,12 +95,13 @@ export function AddDialog(p: Props) {
         onComment={setComment}
         suggestions={suggestions}
       />
+      <PhotoAttachments photos={draft.photos} onChange={draft.setPhotos} />
 
       <View style={dialogStyles.buttons}>
         <DialogButton label="ОТМЕНА" color={colors.teal} onPress={onClose} />
         <View style={styles.right}>
-          <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid} />
-          <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid} />
+          <DialogButton label="МИНУС" color={colors.red} onPress={() => submit(-1)} disabled={!valid || draft.saving} />
+          <DialogButton label="ПЛЮС" color={colors.green} onPress={() => submit(1)} disabled={!valid || draft.saving} />
         </View>
       </View>
     </Dialog>

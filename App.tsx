@@ -17,7 +17,7 @@ import { PopupMenu } from './src/components/PopupMenu';
 import { SortDialog } from './src/components/SortDialog';
 import { confirmAction, notify } from './src/confirm';
 import { formatAmount } from './src/format';
-import { type PhotoSource, pickPhoto } from './src/photos';
+import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
@@ -153,7 +153,9 @@ function MainScreen() {
       case 'clear':
         return confirmAction(
           'Очистить историю?',
-          'Все операции будут заменены одной записью с текущим балансом.',
+          balanceOf(contact) || !contact.operations.some((op) => op.photos?.length)
+            ? 'Все операции будут заменены одной записью с текущим балансом.'
+            : 'Баланс нулевой — все операции и их фото будут удалены.',
           'Очистить',
           () => debts.clearHistory(contact.id),
           true,
@@ -185,9 +187,9 @@ function MainScreen() {
 
   const choosePhoto = async (contactId: string, source: PhotoSource) => {
     try {
-      const uri = await pickPhoto(source);
-      if (uri === 'denied') notify('Нет доступа к камере', 'Разрешите приложению доступ к камере в настройках телефона.');
-      else if (uri) debts.setPhoto(contactId, uri);
+      const picked = await pickImages(source, { crop: true });
+      if (picked === 'denied') notify('Нет доступа к камере', 'Разрешите приложению доступ к камере в настройках телефона.');
+      else if (picked.length) debts.setPhoto(contactId, (await persistPhotos(picked))[0]);
     } catch (e) {
       console.warn(e);
       notify('Не удалось получить фото', source === 'camera' ? 'Камера недоступна.' : undefined);

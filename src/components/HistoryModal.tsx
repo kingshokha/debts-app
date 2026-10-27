@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { type ComponentRef, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { confirmAction } from '../confirm';
 import { formatAmount, formatDate, formatTime } from '../format';
@@ -8,6 +8,7 @@ import { balanceOf } from '../store';
 import { amountColor, colors } from '../theme';
 import type { Contact, Operation } from '../types';
 import { EditOperationDialog } from './EditOperationDialog';
+import { PhotoViewer } from './PhotoViewer';
 import { type Anchor, PopupMenu } from './PopupMenu';
 
 type OpAction = 'edit' | 'delete';
@@ -29,6 +30,7 @@ export function HistoryModal({ contact, suggestions, onClose, onDeleteOperation,
   const insets = useSafeAreaInsets();
   const [menu, setMenu] = useState<{ opId: string; anchor: Anchor } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ photos: string[]; index: number } | null>(null);
 
   // Новые сверху, с остатком после каждой операции
   const rows = useMemo(() => {
@@ -80,7 +82,12 @@ export function HistoryModal({ contact, suggestions, onClose, onDeleteOperation,
           contentContainerStyle={{ padding: 8 }}
           ListEmptyComponent={<Text style={styles.empty}>Операций нет</Text>}
           renderItem={({ item }) => (
-            <HistoryRow op={item} after={item.after} onMenu={(anchor) => setMenu({ opId: item.id, anchor })} />
+            <HistoryRow
+              op={item}
+              after={item.after}
+              onMenu={(anchor) => setMenu({ opId: item.id, anchor })}
+              onPhoto={(index) => setViewer({ photos: item.photos ?? [], index })}
+            />
           )}
         />
       </View>
@@ -93,11 +100,14 @@ export function HistoryModal({ contact, suggestions, onClose, onDeleteOperation,
         onClose={() => setEditId(null)}
         onSubmit={onUpdateOperation}
       />
+      <PhotoViewer photos={viewer?.photos ?? []} index={viewer?.index ?? null} onClose={() => setViewer(null)} />
     </Modal>
   );
 }
 
-function HistoryRow({ op, after, onMenu }: { op: Operation; after: number; onMenu: (anchor: Anchor) => void }) {
+type RowProps = { op: Operation; after: number; onMenu: (anchor: Anchor) => void; onPhoto: (index: number) => void };
+
+function HistoryRow({ op, after, onMenu, onPhoto }: RowProps) {
   const dotsRef = useRef<ComponentRef<typeof View>>(null);
   const openMenu = () => dotsRef.current?.measureInWindow((x, y, _w, height) => onMenu({ x, y, height }));
 
@@ -108,6 +118,15 @@ function HistoryRow({ op, after, onMenu }: { op: Operation; after: number; onMen
           {formatDate(op.date)}, {formatTime(op.date)}
         </Text>
         {op.comment ? <Text style={styles.comment}>{op.comment}</Text> : null}
+        {op.photos?.length ? (
+          <View style={styles.photos}>
+            {op.photos.map((uri, i) => (
+              <Pressable key={i} onPress={() => onPhoto(i)}>
+                <Image source={{ uri }} style={styles.photo} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[styles.amount, { color: amountColor(op.amount) }]}>{formatAmount(op.amount)}</Text>
@@ -130,6 +149,8 @@ const styles = StyleSheet.create({
   row: { backgroundColor: colors.card, borderRadius: 3, paddingLeft: 14, paddingVertical: 14, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 12 },
   date: { color: colors.muted, fontSize: 13 },
   comment: { color: colors.text, fontSize: 16, marginTop: 4 },
+  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  photo: { width: 48, height: 48, borderRadius: 3, backgroundColor: colors.bg },
   amount: { fontSize: 18, fontWeight: '700' },
   after: { color: colors.muted, fontSize: 12, marginTop: 4 },
   dots: { paddingHorizontal: 6, paddingVertical: 8 },

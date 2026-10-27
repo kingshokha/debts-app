@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
+import { deletePhoto } from './photos';
 import type { Contact, Group, Operation, SortSettings, ViewSettings } from './types';
 
 const DATA_KEY = 'debts/contacts/v1';
@@ -38,6 +39,7 @@ export function parseBackup(text: string): Backup | null {
       name: String(c.name ?? ''),
       createdAt: Number(c.createdAt ?? Date.now()),
       groupId: c.groupId && groupIds.has(String(c.groupId)) ? String(c.groupId) : null,
+      photo: typeof c.photo === 'string' ? c.photo : null,
       operations: (Array.isArray(c.operations) ? c.operations : [])
         .map((op: any) => ({
           id: String(op.id ?? newId()),
@@ -151,7 +153,23 @@ export function useDebts() {
     [update],
   );
 
-  const removeContact = useCallback((id: string) => setContacts((list) => list.filter((c) => c.id !== id)), []);
+  /** Ставит или убирает фото; старый файл удаляется. */
+  const setPhoto = useCallback(
+    (id: string, photo: string | null) => {
+      const old = contacts.find((c) => c.id === id)?.photo;
+      if (old !== photo) deletePhoto(old);
+      update(id, (c) => ({ ...c, photo }));
+    },
+    [contacts, update],
+  );
+
+  const removeContact = useCallback(
+    (id: string) => {
+      deletePhoto(contacts.find((c) => c.id === id)?.photo);
+      setContacts((list) => list.filter((c) => c.id !== id));
+    },
+    [contacts],
+  );
 
   const removeOperation = useCallback(
     (contactId: string, opId: string) =>
@@ -193,11 +211,17 @@ export function useDebts() {
     setView((v) => (v.groupId === id ? { ...v, groupId: null } : v));
   }, []);
 
-  const importBackup = useCallback((backup: Backup) => {
-    setGroups(backup.groups);
-    setContacts(backup.contacts);
-    setView((v) => ({ ...v, groupId: null }));
-  }, []);
+  const importBackup = useCallback(
+    (backup: Backup) => {
+      // Фото, на которые копия больше не ссылается, удаляем, чтобы не копились файлы
+      const kept = new Set(backup.contacts.map((c) => c.photo));
+      for (const c of contacts) if (!kept.has(c.photo)) deletePhoto(c.photo);
+      setGroups(backup.groups);
+      setContacts(backup.contacts);
+      setView((v) => ({ ...v, groupId: null }));
+    },
+    [contacts],
+  );
 
   return {
     loaded,
@@ -214,6 +238,7 @@ export function useDebts() {
     clearHistory,
     rename,
     setContactGroup,
+    setPhoto,
     removeContact,
     removeOperation,
     updateOperation,

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { type ComponentRef, memo, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ComponentRef, memo, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatAmount } from '../format';
 import { balanceOf, lastCommentOf } from '../store';
 import { amountColor, colors } from '../theme';
@@ -10,10 +10,14 @@ type Props = {
   contact: Contact;
   onPress: (id: string) => void;
   onMenu: (id: string, anchor: { x: number; y: number; height: number }) => void;
+  onPhoto: (id: string) => void;
 };
 
-export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu }: Props) {
+export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu, onPhoto }: Props) {
   const dotsRef = useRef<ComponentRef<typeof View>>(null);
+  // Фото из копии с другого устройства может не открыться — тогда просто не показываем его
+  const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
+  const photo = contact.photo && contact.photo !== brokenPhoto ? contact.photo : null;
   const balance = balanceOf(contact);
   const comment = lastCommentOf(contact);
 
@@ -27,6 +31,11 @@ export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu }:
       onPress={() => onPress(contact.id)}
       onLongPress={openMenu}
     >
+      {photo ? (
+        <Pressable onPress={() => onPhoto(contact.id)} hitSlop={6} style={styles.avatarBtn}>
+          <Image source={{ uri: photo }} style={styles.avatar} onError={() => setBrokenPhoto(photo)} />
+        </Pressable>
+      ) : null}
       <View style={styles.texts}>
         <Text style={styles.name} numberOfLines={1}>
           {contact.name}
@@ -57,6 +66,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 2,
   },
+  avatarBtn: { marginLeft: -6, marginRight: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.bg },
   texts: { flex: 1, paddingVertical: 10 },
   name: { color: colors.text, fontSize: 19 },
   comment: { color: colors.muted, fontSize: 15, fontStyle: 'italic', marginTop: 2 },

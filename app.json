@@ -24,7 +24,15 @@
     },
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложению нужен доступ к фото, чтобы добавить фотографию контакту.",
+          "cameraPermission": "Приложению нужен доступ к камере, чтобы сфотографировать контакт.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "backgroundColor": "#303030"
   }

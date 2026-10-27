@@ -10,6 +10,7 @@ export type Contact = {
   name: string;
   createdAt: number;
   groupId?: string | null; // нет — «Без группы»
+  photo?: string | null; // uri файла в папке приложения (в вебе — data:-uri)
   operations: Operation[]; // всегда отсортированы по дате по возрастанию
 };
 

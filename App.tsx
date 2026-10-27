@@ -12,15 +12,17 @@ import { Dialog } from './src/components/Dialog';
 import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
 import { NameDialog } from './src/components/NameDialog';
+import { PhotoDialog } from './src/components/PhotoDialog';
 import { PopupMenu } from './src/components/PopupMenu';
 import { SortDialog } from './src/components/SortDialog';
 import { confirmAction, notify } from './src/confirm';
 import { formatAmount } from './src/format';
+import { type PhotoSource, pickPhoto } from './src/photos';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
 
-type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'group' | 'delete';
+type MenuAction = 'payOff' | 'balance' | 'history' | 'clear' | 'rename' | 'group' | 'photo' | 'delete';
 
 const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'payOff', label: 'Погасить всю сумму' },
@@ -29,6 +31,7 @@ const CONTACT_MENU: { action: MenuAction; label: string }[] = [
   { action: 'clear', label: 'Очистить историю' },
   { action: 'rename', label: 'Переименовать' },
   { action: 'group', label: 'Изменить группу' },
+  { action: 'photo', label: 'Добавить фото' },
   { action: 'delete', label: 'Удалить контакт' },
 ];
 
@@ -70,6 +73,7 @@ function MainScreen() {
   const [nameEdit, setNameEdit] = useState<NameEdit | null>(null);
   const [groupContactId, setGroupContactId] = useState<string | null>(null);
   const [groupActions, setGroupActions] = useState<Group | null>(null);
+  const [photoId, setPhotoId] = useState<string | null>(null);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 
@@ -158,6 +162,8 @@ function MainScreen() {
         return setNameEdit({ kind: 'contact', id: contact.id, initial: contact.name });
       case 'group':
         return setGroupContactId(contact.id);
+      case 'photo':
+        return setPhotoId(contact.id);
       case 'delete':
         return confirmAction(
           'Удалить контакт?',
@@ -167,6 +173,38 @@ function MainScreen() {
           true,
         );
     }
+  };
+
+  const menuHasPhoto = !!byId(menu?.id ?? null)?.photo;
+  const menuItems = useMemo(
+    () => CONTACT_MENU.map((item) => (item.action === 'photo' && menuHasPhoto ? { ...item, label: 'Изменить фото' } : item)),
+    [menuHasPhoto],
+  );
+
+  const onRowPhoto = useCallback((id: string) => setPhotoId(id), []);
+
+  const choosePhoto = async (contactId: string, source: PhotoSource) => {
+    try {
+      const uri = await pickPhoto(source);
+      if (uri === 'denied') notify('Нет доступа к камере', 'Разрешите приложению доступ к камере в настройках телефона.');
+      else if (uri) debts.setPhoto(contactId, uri);
+    } catch (e) {
+      console.warn(e);
+      notify('Не удалось получить фото', source === 'camera' ? 'Камера недоступна.' : undefined);
+    }
+  };
+
+  const removePhoto = (contact: Contact) =>
+    confirmAction('Удалить фото?', contact.name, 'Удалить', () => debts.setPhoto(contact.id, null), true);
+
+  const openAdd = () => {
+    setDialogKey((k) => k + 1);
+    setAddOpen(true);
+  };
+
+  const openBackup = () => {
+    setDialogKey((k) => k + 1);
+    setBackupOpen(true);
   };
 
   const submitName = (name: string) => {
@@ -192,10 +230,7 @@ function MainScreen() {
       <View style={[styles.header, { paddingTop: insets.top }]}>
         {search === null ? (
           <>
-            <Pressable onPress={() => {
-                setDialogKey((k) => k + 1);
-                setBackupOpen(true);
-              }} hitSlop={8} style={styles.iconBtn}>
+            <Pressable onPress={openBackup} hitSlop={8} style={styles.iconBtn}>
               <MaterialCommunityIcons name="menu" size={30} color="#fff" />
             </Pressable>
             <View style={{ flex: 1 }} />
@@ -267,7 +302,7 @@ function MainScreen() {
         <FlatList
           data={visible}
           keyExtractor={(c) => c.id}
-          renderItem={({ item }) => <ContactRow contact={item} onPress={onRowPress} onMenu={onRowMenu} />}
+          renderItem={({ item }) => <ContactRow contact={item} onPress={onRowPress} onMenu={onRowMenu} onPhoto={onRowPhoto} />}
           contentContainerStyle={{ paddingTop: 7, paddingBottom: insets.bottom + 100 }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -289,10 +324,7 @@ function MainScreen() {
         <Pressable
           style={styles.fabPress}
           android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
-          onPress={() => {
-            setDialogKey((k) => k + 1);
-            setAddOpen(true);
-          }}
+          onPress={openAdd}
         >
           <MaterialCommunityIcons name="plus" size={32} color="#fff" />
         </Pressable>
@@ -310,7 +342,7 @@ function MainScreen() {
         onSubmit={debts.addContact}
       />
       <SortDialog visible={sortOpen} sort={sort} onChange={debts.setSort} onClose={() => setSortOpen(false)} />
-      <PopupMenu items={CONTACT_MENU} anchor={menu?.anchor ?? null} onSelect={onMenuAction} onClose={() => setMenu(null)} />
+      <PopupMenu items={menuItems} anchor={menu?.anchor ?? null} onSelect={onMenuAction} onClose={() => setMenu(null)} />
       <BalanceDialog
         contact={byId(balanceId)}
         suggestions={suggestions}
@@ -339,6 +371,7 @@ function MainScreen() {
         onCreateGroup={debts.addGroup}
         onSubmit={debts.setContactGroup}
       />
+      <PhotoDialog contact={byId(photoId)} onClose={() => setPhotoId(null)} onPick={choosePhoto} onRemove={removePhoto} />
       <Dialog visible={groupActions !== null} onClose={() => setGroupActions(null)} title={groupActions?.name}>
         {(['rename', 'delete'] as const).map((action) => (
           <Pressable

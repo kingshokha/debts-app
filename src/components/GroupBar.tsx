@@ -53,7 +53,8 @@ function Tab({ label, count, active, onPress, onLongPress }: TabProps) {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexGrow: 0, backgroundColor: '#0e3760' },
+  // У ScrollView по умолчанию flexShrink: 1 — длинный список под полосой сжимал её и обрезал вкладки
+  bar: { flexGrow: 0, flexShrink: 0, backgroundColor: '#0e3760' },
   content: { paddingHorizontal: 8, paddingVertical: 8, gap: 8 },
   tab: {
     flexDirection: 'row',

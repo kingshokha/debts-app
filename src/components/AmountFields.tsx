@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { evalExpression, formatAmount, formatDate } from '../format';
+import { formatAmount, formatDate, parseAmount } from '../format';
 import { colors } from '../theme';
 import { dialogStyles } from './Dialog';
 
@@ -23,7 +23,7 @@ export function AmountFields(p: Props) {
   const [calcMode, setCalcMode] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const value = evalExpression(p.amountText);
+  const value = parseAmount(p.amountText);
   const isExpression = /[-+*/×÷()]/.test(p.amountText.replace(/^\s*-/, ''));
 
   const pickDate = () => {

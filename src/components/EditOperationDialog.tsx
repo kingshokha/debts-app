@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { evalExpression, formatAmount, withTimeOf } from '../format';
+import { amountToInput, parseAmount, withTimeOf } from '../format';
 import { colors } from '../theme';
 import type { Contact, Operation } from '../types';
 import { AmountFields } from './AmountFields';
@@ -21,12 +21,12 @@ export function EditOperationDialog({ operation, ...rest }: Props) {
 }
 
 function EditOperationForm({ contact, operation, suggestions, onClose, onSubmit }: Props & { operation: Operation }) {
-  const [amountText, setAmountText] = useState(() => formatAmount(Math.abs(operation.amount), false).replace(/\s/g, ''));
+  const [amountText, setAmountText] = useState(() => amountToInput(operation.amount));
   const [date, setDate] = useState(() => new Date(operation.date));
   const [comment, setComment] = useState(operation.comment);
   const [sign, setSign] = useState<1 | -1>(operation.amount < 0 ? -1 : 1);
 
-  const amount = evalExpression(amountText);
+  const amount = parseAmount(amountText);
   const valid = amount !== null && amount > 0;
 
   const save = () => {

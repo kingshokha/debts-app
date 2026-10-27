@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { confirmAction, notify } from '../confirm';
-import { type Backup, parseBackup } from '../store';
+import { type Backup, parseBackup, serializeBackup } from '../backup';
 import { colors } from '../theme';
 import type { Contact, Group } from '../types';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
@@ -24,7 +24,7 @@ export function BackupDialog({ visible, contacts, groups, onClose, onImport }: P
 
   const exportData = async () => {
     onClose();
-    await Share.share({ message: JSON.stringify({ app: 'debts', version: 2, contacts, groups }) });
+    await Share.share({ message: serializeBackup(contacts, groups) });
   };
 
   const importData = () => {

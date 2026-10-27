@@ -1,19 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Backup } from './backup';
+import { notify } from './confirm';
+import * as db from './db';
+import { newId } from './id';
 import { deletePhotos } from './photos';
 import type { Contact, Group, Operation, SortSettings, ViewSettings } from './types';
 
-const DATA_KEY = 'debts/contacts/v1';
-const GROUPS_KEY = 'debts/groups/v1';
 const SORT_KEY = 'debts/sort/v1';
 const VIEW_KEY = 'debts/view/v1';
 
 const DEFAULT_SORT: SortSettings = { key: 'date', desc: true, showZero: true };
 const DEFAULT_VIEW: ViewSettings = { mode: 'all', groupId: null };
 
-export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-
-export const balanceOf = (c: Contact) => Math.round(c.operations.reduce((s, op) => s + op.amount, 0) * 100) / 100;
+/** Баланс в дирамах. */
+export const balanceOf = (c: Contact) => c.operations.reduce((s, op) => s + op.amount, 0);
 
 export const lastDateOf = (c: Contact) => c.operations.at(-1)?.date ?? c.createdAt;
 
@@ -24,39 +25,12 @@ const insertOp = (ops: Operation[], op: Operation) => [...ops, op].sort((a, b) =
 /** Все файлы фото контакта: его фото и фото паспорта. */
 export const photosOf = (c: Contact) => [c.photo, ...(c.passport ?? [])];
 
-export type Backup = { contacts: Contact[]; groups: Group[] };
-
-/** Проверка импортируемых данных. Понимает и старый формат — просто массив контактов. */
-export function parseBackup(text: string): Backup | null {
-  try {
-    const data = JSON.parse(text);
-    const list = Array.isArray(data) ? data : data?.contacts;
-    if (!Array.isArray(list)) return null;
-    const groups: Group[] = (Array.isArray(data?.groups) ? data.groups : []).map((g: any) => ({
-      id: String(g.id ?? newId()),
-      name: String(g.name ?? ''),
-    }));
-    const groupIds = new Set(groups.map((g) => g.id));
-    const contacts = list.map((c: any) => ({
-      id: String(c.id ?? newId()),
-      name: String(c.name ?? ''),
-      createdAt: Number(c.createdAt ?? Date.now()),
-      groupId: c.groupId && groupIds.has(String(c.groupId)) ? String(c.groupId) : null,
-      photo: typeof c.photo === 'string' ? c.photo : null,
-      passport: Array.isArray(c.passport) ? c.passport.filter((uri: unknown) => typeof uri === 'string') : [],
-      operations: (Array.isArray(c.operations) ? c.operations : [])
-        .map((op: any) => ({
-          id: String(op.id ?? newId()),
-          amount: Number(op.amount) || 0,
-          date: Number(op.date ?? Date.now()),
-          comment: String(op.comment ?? ''),
-        }))
-        .sort((a: Operation, b: Operation) => a.date - b.date),
-    }));
-    return { contacts, groups };
-  } catch {
-    return null;
-  }
+/** Запись в базу идёт в фоне; если она не удалась, данные в памяти и в базе разойдутся — сообщаем. */
+function save(write: Promise<unknown>) {
+  write.catch((e) => {
+    console.warn('Ошибка базы данных', e);
+    notify('Не удалось сохранить изменения', 'Перезапустите приложение и проверьте последние действия.');
+  });
 }
 
 /** Сохраняет значение в AsyncStorage при каждом изменении (после первичной загрузки). */
@@ -67,43 +41,76 @@ function usePersist(key: string, value: unknown, loaded: boolean) {
 }
 
 export function useDebts() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [contacts, setContactsState] = useState<Contact[]>([]);
+  const [groups, setGroupsState] = useState<Group[]>([]);
   const [sort, setSort] = useState<SortSettings>(DEFAULT_SORT);
   const [view, setView] = useState<ViewSettings>(DEFAULT_VIEW);
   const [loaded, setLoaded] = useState(false);
 
+  // Актуальные данные для действий: из них считается и новое состояние, и запись в базу
+  const contactsRef = useRef(contacts);
+  const groupsRef = useRef(groups);
+
+  const setContacts = useCallback((next: Contact[]) => {
+    contactsRef.current = next;
+    setContactsState(next);
+  }, []);
+
+  const setGroups = useCallback((next: Group[]) => {
+    groupsRef.current = next;
+    setGroupsState(next);
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
-        const [data, groupsData, sortData, viewData] = await Promise.all(
-          [DATA_KEY, GROUPS_KEY, SORT_KEY, VIEW_KEY].map((k) => AsyncStorage.getItem(k)),
-        );
-        if (data) setContacts(JSON.parse(data));
-        if (groupsData) setGroups(JSON.parse(groupsData));
+        const [stored, sortData, viewData] = await Promise.all([
+          db.loadAll(),
+          AsyncStorage.getItem(SORT_KEY),
+          AsyncStorage.getItem(VIEW_KEY),
+        ]);
+        setContacts(stored.contacts);
+        setGroups(stored.groups);
         if (sortData) setSort({ ...DEFAULT_SORT, ...JSON.parse(sortData) });
         if (viewData) setView({ ...DEFAULT_VIEW, ...JSON.parse(viewData) });
       } catch (e) {
         console.warn('Не удалось загрузить данные', e);
+        notify('Не удалось открыть базу данных', String((e as Error)?.message ?? e));
       } finally {
         setLoaded(true);
       }
     })();
-  }, []);
+  }, [setContacts, setGroups]);
 
-  usePersist(DATA_KEY, contacts, loaded);
-  usePersist(GROUPS_KEY, groups, loaded);
   usePersist(SORT_KEY, sort, loaded);
   usePersist(VIEW_KEY, view, loaded);
 
-  const update = useCallback((id: string, fn: (c: Contact) => Contact) => {
-    setContacts((list) => list.map((c) => (c.id === id ? fn(c) : c)));
-  }, []);
+  const replaceContact = useCallback(
+    (next: Contact) => setContacts(contactsRef.current.map((c) => (c.id === next.id ? next : c))),
+    [setContacts],
+  );
+
+  /** Меняет поля контакта (имя, группа, фото) и сохраняет их. */
+  const updateContact = useCallback(
+    (id: string, fn: (c: Contact) => Contact) => {
+      const contact = contactsRef.current.find((c) => c.id === id);
+      if (!contact) return;
+      const next = fn(contact);
+      replaceContact(next);
+      save(db.updateContact(next));
+    },
+    [replaceContact],
+  );
 
   const addOperation = useCallback(
-    (contactId: string, amount: number, date: number, comment: string) =>
-      update(contactId, (c) => ({ ...c, operations: insertOp(c.operations, { id: newId(), amount, date, comment }) })),
-    [update],
+    (contactId: string, amount: number, date: number, comment: string) => {
+      const contact = contactsRef.current.find((c) => c.id === contactId);
+      if (!contact) return;
+      const op: Operation = { id: newId(), amount, date, comment };
+      replaceContact({ ...contact, operations: insertOp(contact.operations, op) });
+      save(db.insertOperation(contactId, op));
+    },
+    [replaceContact],
   );
 
   /**
@@ -121,138 +128,168 @@ export function useDebts() {
       passport: string[],
     ) => {
       const trimmed = name.trim();
-      const sameName = (c: Contact) => c.name.trim().toLowerCase() === trimmed.toLowerCase();
-      // У существующего контакта своё фото остаётся — новое не понадобится
-      if (photo && contacts.find(sameName)?.photo) deletePhotos([photo]);
-      setContacts((list) => {
-        const op: Operation = { id: newId(), amount, date, comment };
-        const existing = list.find(sameName);
-        if (existing) {
-          return list.map((c) =>
-            c.id === existing.id
-              ? {
-                  ...c,
-                  groupId: c.groupId ?? groupId,
-                  photo: c.photo ?? photo,
-                  passport: [...(c.passport ?? []), ...passport],
-                  operations: insertOp(c.operations, op),
-                }
-              : c,
-          );
-        }
-        return [...list, { id: newId(), name: trimmed, createdAt: Date.now(), groupId, photo, passport, operations: [op] }];
-      });
+      const existing = contactsRef.current.find((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase());
+      const op: Operation = { id: newId(), amount, date, comment };
+      if (existing) {
+        // У существующего контакта своё фото остаётся — новое не понадобится
+        if (photo && existing.photo) deletePhotos([photo]);
+        const next: Contact = {
+          ...existing,
+          groupId: existing.groupId ?? groupId,
+          photo: existing.photo ?? photo,
+          passport: [...(existing.passport ?? []), ...passport],
+          operations: insertOp(existing.operations, op),
+        };
+        replaceContact(next);
+        save(db.updateContact(next));
+        save(db.insertOperation(existing.id, op));
+        return;
+      }
+      const contact: Contact = { id: newId(), name: trimmed, createdAt: Date.now(), groupId, photo, passport, operations: [op] };
+      setContacts([...contactsRef.current, contact]);
+      save(db.insertContact(contact));
     },
-    [contacts],
+    [replaceContact, setContacts],
   );
 
   const payOff = useCallback(
-    (id: string) =>
-      update(id, (c) => {
-        const balance = balanceOf(c);
-        if (!balance) return c;
-        return { ...c, operations: insertOp(c.operations, { id: newId(), amount: -balance, date: Date.now(), comment: 'Погашение' }) };
-      }),
-    [update],
+    (id: string) => {
+      const contact = contactsRef.current.find((c) => c.id === id);
+      const balance = contact ? balanceOf(contact) : 0;
+      if (balance) addOperation(id, -balance, Date.now(), 'Погашение');
+    },
+    [addOperation],
   );
 
   /** Схлопывает историю в одну операцию с текущим балансом. */
   const clearHistory = useCallback(
-    (id: string) =>
-      update(id, (c) => {
-        const balance = balanceOf(c);
-        const operations = balance ? [{ id: newId(), amount: balance, date: Date.now(), comment: lastCommentOf(c) }] : [];
-        return { ...c, operations };
-      }),
-    [update],
+    (id: string) => {
+      const contact = contactsRef.current.find((c) => c.id === id);
+      if (!contact) return;
+      const balance = balanceOf(contact);
+      const operations = balance ? [{ id: newId(), amount: balance, date: Date.now(), comment: lastCommentOf(contact) }] : [];
+      replaceContact({ ...contact, operations });
+      save(db.replaceOperations(id, operations));
+    },
+    [replaceContact],
   );
 
-  const rename = useCallback((id: string, name: string) => update(id, (c) => ({ ...c, name: name.trim() })), [update]);
+  const rename = useCallback((id: string, name: string) => updateContact(id, (c) => ({ ...c, name: name.trim() })), [updateContact]);
 
   const setContactGroup = useCallback(
-    (id: string, groupId: string | null) => update(id, (c) => ({ ...c, groupId })),
-    [update],
+    (id: string, groupId: string | null) => updateContact(id, (c) => ({ ...c, groupId })),
+    [updateContact],
   );
 
   /** Ставит или убирает фото; старый файл удаляется. */
   const setPhoto = useCallback(
-    (id: string, photo: string | null) => {
-      const old = contacts.find((c) => c.id === id)?.photo;
-      if (old !== photo) deletePhotos([old]);
-      update(id, (c) => ({ ...c, photo }));
-    },
-    [contacts, update],
+    (id: string, photo: string | null) =>
+      updateContact(id, (c) => {
+        if (c.photo !== photo) deletePhotos([c.photo]);
+        return { ...c, photo };
+      }),
+    [updateContact],
   );
 
   /** Заменяет фото паспорта; убранные файлы удаляются. */
   const setPassport = useCallback(
-    (id: string, passport: string[]) => {
-      const kept = new Set(passport);
-      deletePhotos((contacts.find((c) => c.id === id)?.passport ?? []).filter((uri) => !kept.has(uri)));
-      update(id, (c) => ({ ...c, passport }));
-    },
-    [contacts, update],
+    (id: string, passport: string[]) =>
+      updateContact(id, (c) => {
+        const kept = new Set(passport);
+        deletePhotos((c.passport ?? []).filter((uri) => !kept.has(uri)));
+        return { ...c, passport };
+      }),
+    [updateContact],
   );
 
   const removeContact = useCallback(
     (id: string) => {
-      const contact = contacts.find((c) => c.id === id);
+      const contact = contactsRef.current.find((c) => c.id === id);
       if (contact) deletePhotos(photosOf(contact));
-      setContacts((list) => list.filter((c) => c.id !== id));
+      setContacts(contactsRef.current.filter((c) => c.id !== id));
+      save(db.deleteContact(id));
     },
-    [contacts],
+    [setContacts],
   );
 
   const removeOperation = useCallback(
-    (contactId: string, opId: string) =>
-      update(contactId, (c) => ({ ...c, operations: c.operations.filter((op) => op.id !== opId) })),
-    [update],
+    (contactId: string, opId: string) => {
+      const contact = contactsRef.current.find((c) => c.id === contactId);
+      if (!contact) return;
+      replaceContact({ ...contact, operations: contact.operations.filter((op) => op.id !== opId) });
+      save(db.deleteOperation(opId));
+    },
+    [replaceContact],
   );
 
   const updateOperation = useCallback(
-    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) =>
-      update(contactId, (c) => ({
-        ...c,
-        operations: c.operations.map((op) => (op.id === opId ? { ...op, ...patch } : op)).sort((a, b) => a.date - b.date),
-      })),
-    [update],
+    (contactId: string, opId: string, patch: Omit<Operation, 'id'>) => {
+      const contact = contactsRef.current.find((c) => c.id === contactId);
+      if (!contact) return;
+      const updated: Operation = { id: opId, ...patch };
+      replaceContact({
+        ...contact,
+        operations: contact.operations.map((op) => (op.id === opId ? updated : op)).sort((a, b) => a.date - b.date),
+      });
+      save(db.updateOperation(updated));
+    },
+    [replaceContact],
   );
 
   /** Создаёт группу (или возвращает существующую с таким же именем) и отдаёт её id. */
   const addGroup = useCallback(
     (name: string) => {
       const trimmed = name.trim();
-      const existing = groups.find((g) => g.name.toLowerCase() === trimmed.toLowerCase());
+      const existing = groupsRef.current.find((g) => g.name.toLowerCase() === trimmed.toLowerCase());
       if (existing) return existing.id;
       const id = newId();
-      setGroups((list) => [...list, { id, name: trimmed }]);
+      const next = [...groupsRef.current, { id, name: trimmed }];
+      setGroups(next);
+      save(db.saveGroups(next));
       return id;
     },
-    [groups],
+    [setGroups],
   );
 
   const renameGroup = useCallback(
-    (id: string, name: string) => setGroups((list) => list.map((g) => (g.id === id ? { ...g, name: name.trim() } : g))),
-    [],
+    (id: string, name: string) => {
+      const next = groupsRef.current.map((g) => (g.id === id ? { ...g, name: name.trim() } : g));
+      setGroups(next);
+      save(db.saveGroups(next));
+    },
+    [setGroups],
   );
 
   /** Удаляет группу; её контакты остаются, но переходят в «Без группы». */
-  const removeGroup = useCallback((id: string) => {
-    setGroups((list) => list.filter((g) => g.id !== id));
-    setContacts((list) => list.map((c) => (c.groupId === id ? { ...c, groupId: null } : c)));
-    setView((v) => (v.groupId === id ? { ...v, groupId: null } : v));
-  }, []);
+  const removeGroup = useCallback(
+    (id: string) => {
+      const next = groupsRef.current.filter((g) => g.id !== id);
+      setGroups(next);
+      setContacts(contactsRef.current.map((c) => (c.groupId === id ? { ...c, groupId: null } : c)));
+      setView((v) => (v.groupId === id ? { ...v, groupId: null } : v));
+      save(db.removeGroup(id, next));
+    },
+    [setContacts, setGroups],
+  );
 
+  /** Заменяет все данные копией. Состояние меняется, только если запись в базу прошла. */
   const importBackup = useCallback(
-    (backup: Backup) => {
+    async (backup: Backup) => {
+      try {
+        await db.replaceAll(backup);
+      } catch (e) {
+        console.warn(e);
+        notify('Не удалось восстановить копию', 'Данные остались прежними.');
+        return;
+      }
       // Фото, на которые копия больше не ссылается, удаляем, чтобы не копились файлы
       const kept = new Set(backup.contacts.flatMap(photosOf));
-      deletePhotos(contacts.flatMap(photosOf).filter((uri) => !kept.has(uri)));
+      deletePhotos(contactsRef.current.flatMap(photosOf).filter((uri) => !kept.has(uri)));
       setGroups(backup.groups);
       setContacts(backup.contacts);
       setView((v) => ({ ...v, groupId: null }));
     },
-    [contacts],
+    [setContacts, setGroups],
   );
 
   return {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { evalExpression, formatAmount, withCurrentTime } from '../format';
+import { formatAmount, parseAmount, withCurrentTime } from '../format';
 import { balanceOf } from '../store';
 import { amountColor, colors } from '../theme';
 import type { Contact } from '../types';
@@ -27,7 +27,7 @@ function BalanceForm({ contact, suggestions, onClose, onSubmit, onHistory }: Pro
   const [comment, setComment] = useState('');
 
   const balance = balanceOf(contact);
-  const amount = evalExpression(amountText);
+  const amount = parseAmount(amountText);
   const valid = amount !== null && amount > 0;
   const delta = valid ? amount! : 0;
   const ifMinus = balance - delta;

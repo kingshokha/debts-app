@@ -35,7 +35,7 @@ export function HistoryModal({ contact, suggestions, onClose, onDeleteOperation,
     if (!contact) return [];
     let running = 0;
     const withBalance = contact.operations.map((op) => {
-      running = Math.round((running + op.amount) * 100) / 100;
+      running += op.amount;
       return { ...op, after: running };
     });
     return withBalance.reverse();

@@ -32,7 +32,8 @@
           "cameraPermission": "Приложению нужен доступ к камере, чтобы сфотографировать контакт.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "backgroundColor": "#303030"
   }

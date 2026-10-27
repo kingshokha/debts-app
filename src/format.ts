@@ -1,14 +1,26 @@
 const MONTHS = ['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'];
 
-/** 820032 -> "+820 032", -116 -> "-116", 0 -> "0" */
-export function formatAmount(n: number, withPlus = true): string {
-  const abs = Math.abs(Math.round(n * 100) / 100);
-  const [int, frac] = abs.toFixed(2).replace(/\.?0+$/, '').split('.');
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  const body = frac ? `${grouped},${frac}` : grouped;
-  if (n < 0) return '-' + body;
-  if (n > 0 && withPlus) return '+' + body;
+// Все суммы в приложении — целые дирамы (100 дирам = 1 сомони); в сомони они только показываются
+
+/** Дирамы -> сомони: 82519700 -> "+825 197,00", -11600 -> "-116,00", 0 -> "0,00" */
+export function formatAmount(dirams: number, withPlus = true): string {
+  const abs = Math.abs(Math.round(dirams));
+  const int = String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const body = `${int},${String(abs % 100).padStart(2, '0')}`;
+  if (dirams < 0) return '-' + body;
+  if (dirams > 0 && withPlus) return '+' + body;
   return body;
+}
+
+/** Введённая сумма в сомони (можно выражением: "100+50,5") -> дирамы; null, если не разобрать. */
+export function parseAmount(input: string): number | null {
+  const somoni = evalExpression(input);
+  return somoni === null ? null : Math.round(somoni * 100);
+}
+
+/** Дирамы -> текст для поля ввода без лишних нулей: 150050 -> "1500,5", 150000 -> "1500". */
+export function amountToInput(dirams: number): string {
+  return (Math.abs(dirams) / 100).toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 }
 
 /** "27 окт. 2026" */

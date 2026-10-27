@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { notify } from '../confirm';
-import { evalExpression, withCurrentTime } from '../format';
+import { parseAmount, withCurrentTime } from '../format';
 import { persistPhotos } from '../photos';
 import { colors } from '../theme';
 import type { Contact, Group } from '../types';
@@ -43,7 +43,7 @@ export function AddDialog(p: Props) {
   const [passport, setPassport] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const amount = evalExpression(amountText);
+  const amount = parseAmount(amountText);
   const valid = name.trim().length > 0 && amount !== null && amount > 0;
 
   // Подсказки существующих контактов, чтобы не плодить дубли

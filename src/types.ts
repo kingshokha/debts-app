@@ -1,6 +1,6 @@
 export type Operation = {
   id: string;
-  amount: number; // > 0 — долг в плюс, < 0 — в минус
+  amount: number; // целые дирамы (100 = 1 сомони); > 0 — долг в плюс, < 0 — в минус
   date: number; // timestamp
   comment: string;
 };

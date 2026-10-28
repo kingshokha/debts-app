@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { amountToInput, parseAmount, withTimeOf } from '../format';
 import { colors } from '../theme';
 import type { Contact, Operation } from '../types';

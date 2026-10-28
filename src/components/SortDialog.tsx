@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { colors } from '../theme';
 import type { SortKey, SortSettings } from '../types';
 import { Dialog, dialogStyles } from './Dialog';

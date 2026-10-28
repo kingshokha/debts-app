@@ -1,4 +1,5 @@
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { colors } from '../theme';
 
 export type Anchor = { x: number; y: number; height: number };

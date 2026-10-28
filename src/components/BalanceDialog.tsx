@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { formatAmount, parseAmount, withCurrentTime } from '../format';
 import { balanceOf } from '../store';
 import { amountColor, colors } from '../theme';

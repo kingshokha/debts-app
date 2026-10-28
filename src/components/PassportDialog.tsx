@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { notify } from '../confirm';
 import { persistPhotos } from '../photos';
 import { colors } from '../theme';

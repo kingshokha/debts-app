@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { formatAmount, formatDate, formatTime } from '../format';
 import { type BookSummary, type DebtBook, DebtBookError, readDebtBook, summarize } from '../import/debtBook';
 import type { ImportPlan, ImportStats } from '../import/merge';

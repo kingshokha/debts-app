@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { type ComponentRef, memo, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { formatAmount } from '../format';
 import { balanceOf, lastCommentOf } from '../store';
 import { amountColor, colors } from '../theme';

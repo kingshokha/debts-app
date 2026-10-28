@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import { TextInput } from '../ui/Text';
 import { colors } from '../theme';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';
 

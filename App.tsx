@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from './src/ui/Text';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddDialog } from './src/components/AddDialog';
 import { BackupDialog } from './src/components/BackupDialog';
@@ -23,6 +24,7 @@ import { useDrive } from './src/drive/useDrive';
 import { formatAmount } from './src/format';
 import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
+import { SettingsProvider } from './src/settings';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
@@ -56,8 +58,10 @@ const NAME_DIALOG_TITLE: Record<NameEdit['kind'], string> = {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      <MainScreen />
+      <SettingsProvider>
+        <StatusBar style="light" />
+        <MainScreen />
+      </SettingsProvider>
     </SafeAreaProvider>
   );
 }

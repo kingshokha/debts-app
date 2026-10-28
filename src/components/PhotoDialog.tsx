@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/Text';
 import type { PhotoSource } from '../photos';
 import { colors } from '../theme';
 import type { Contact } from '../types';

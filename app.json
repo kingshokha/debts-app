@@ -34,7 +34,8 @@
         }
       ],
       "expo-sqlite",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-secure-store"
     ],
     "backgroundColor": "#303030",
     "extra": {

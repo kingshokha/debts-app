@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { colors } from '../theme';
 import type { Contact, Group } from '../types';
 import { Dialog, DialogButton, dialogStyles } from './Dialog';

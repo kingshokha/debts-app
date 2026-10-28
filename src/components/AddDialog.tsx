@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../ui/Text';
 import { notify } from '../confirm';
 import { parseAmount, withCurrentTime } from '../format';
 import { persistPhotos } from '../photos';

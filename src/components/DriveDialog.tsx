@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/Text';
 import { confirmAction, notify } from '../confirm';
 import type { DriveFile } from '../drive/api';
 import type { useDrive } from '../drive/useDrive';

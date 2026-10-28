@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Share, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../ui/Text';
 import { confirmAction, notify } from '../confirm';
 import { type Backup, parseBackup, serializeBackup } from '../backup';
 import { colors } from '../theme';

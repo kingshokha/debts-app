@@ -8,7 +8,13 @@ const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-export type DriveFile = { id: string; name: string; createdTime: string; size?: string };
+export type DriveFile = {
+  id: string;
+  name: string;
+  createdTime: string;
+  size?: string;
+  appProperties?: Record<string, string>;
+};
 
 const query = (params: Record<string, string | undefined>) =>
   Object.entries(params)
@@ -54,7 +60,7 @@ export async function listFiles(q: string, orderBy?: string): Promise<DriveFile[
       pageToken,
       pageSize: '1000',
       spaces: 'drive',
-      fields: 'nextPageToken,files(id,name,createdTime,size)',
+      fields: 'nextPageToken,files(id,name,createdTime,size,appProperties)',
     });
     const page = await (await request(`${API}/files?${params}`)).json();
     files.push(...page.files);
@@ -81,12 +87,21 @@ export async function findOrCreateFolder(name: string, parentId?: string): Promi
   return (await res.json()).id;
 }
 
-/** Создаёт текстовый файл одним multipart-запросом. */
-export async function uploadText(name: string, parentId: string, text: string, mimeType = 'application/json') {
+/**
+ * Создаёт текстовый файл одним multipart-запросом.
+ * appProperties — короткие пометки к файлу, которые возвращает список файлов (без скачивания содержимого).
+ */
+export async function uploadText(
+  name: string,
+  parentId: string,
+  text: string,
+  appProperties?: Record<string, string>,
+  mimeType = 'application/json',
+) {
   const boundary = `debts-${Date.now().toString(36)}`;
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify({ name, mimeType, parents: [parentId] })}\r\n` +
+    `${JSON.stringify({ name, mimeType, parents: [parentId], appProperties })}\r\n` +
     `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${text}\r\n--${boundary}--`;
   await request(`${UPLOAD}/files?uploadType=multipart&fields=id`, {
     method: 'POST',

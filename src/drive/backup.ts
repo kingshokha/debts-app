@@ -15,12 +15,41 @@ import {
 } from './api';
 import { backupFileName, fromPortable, photoRefsOf, toPortable } from './portable';
 
-// Структура на Диске:  Долги/  — копии данных «Долги 2026-10-28 05-10.json» (последние KEEP_BACKUPS)
-//                      Долги/Фото/ — фото контактов и паспортов, по одному файлу, догружаются только новые
+// Структура на Диске:  Долги/  — копии данных «Долги 2026-10-28 05-10.json», хранятся все
+//                      Долги/Фото/ — фото контактов и паспортов, по одному файлу, догружаются только новые.
+// С Диска ничего не удаляется автоматически: фото удалённых контактов и убранных страниц паспорта
+// остаются, чтобы любая старая копия восстанавливалась целиком.
 
 const ROOT_FOLDER = 'Долги';
 const PHOTOS_FOLDER = 'Фото';
-export const KEEP_BACKUPS = 10;
+
+/** Сводка копии: хранится в appProperties файла, чтобы список копий не скачивал их содержимое. */
+export type BackupStats = { contacts: number; operations: number; positive: number; negative: number };
+
+function statsOf(data: AppData): BackupStats {
+  let positive = 0;
+  let negative = 0;
+  let operations = 0;
+  for (const c of data.contacts) {
+    const balance = c.operations.reduce((s, op) => s + op.amount, 0);
+    if (balance > 0) positive += balance;
+    else negative += balance;
+    operations += c.operations.length;
+  }
+  return { contacts: data.contacts.length, operations, positive, negative };
+}
+
+/** Сводка из appProperties; null — копия сделана до появления сводок. */
+export function backupStats(file: DriveFile): BackupStats | null {
+  const p = file.appProperties;
+  if (!p?.contacts) return null;
+  return {
+    contacts: Number(p.contacts),
+    operations: Number(p.operations),
+    positive: Number(p.positive),
+    negative: Number(p.negative),
+  };
+}
 
 export type Progress = (label: string, fraction: number) => void;
 
@@ -43,19 +72,16 @@ export async function backupToDrive(data: AppData, onProgress?: Progress) {
     await uploadFile(photoFile(toUpload[i]), toUpload[i], photosId, 'image/jpeg');
   }
 
-  // Фото удалённых контактов и убранные страницы паспортов на Диске больше не храним
-  const used = new Set(photoNames);
-  for (const f of remote) if (!used.has(f.name)) await deleteFile(f.id);
-
   onProgress?.('Сохранение данных…', 0.85);
   const name = backupFileName(new Date());
-  await uploadText(name, rootId, serializeBackup(contacts, data.groups, data.templates));
-
-  const backups = await backupsIn(rootId);
-  for (const old of backups.slice(KEEP_BACKUPS)) await deleteFile(old.id);
+  const stats = Object.fromEntries(Object.entries(statsOf(data)).map(([k, v]) => [k, String(v)]));
+  await uploadText(name, rootId, serializeBackup(contacts, data.groups, data.templates), stats);
   onProgress?.('Готово', 1);
   return { name, photosUploaded: toUpload.length };
 }
+
+/** Удаляет одну копию данных. Фото остаются: на них могут ссылаться другие копии. */
+export const deleteDriveBackup = (id: string) => deleteFile(id);
 
 /** Копии на Диске, новые сверху. */
 export async function listDriveBackups(): Promise<DriveFile[]> {

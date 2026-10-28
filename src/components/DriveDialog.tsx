@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { confirmAction, notify } from '../confirm';
 import type { DriveFile } from '../drive/api';
-import { KEEP_BACKUPS } from '../drive/backup';
 import type { useDrive } from '../drive/useDrive';
 import { formatDate, formatTime } from '../format';
 import { colors } from '../theme';
@@ -84,7 +83,7 @@ export function DriveDialog({ visible, drive, onClose }: Props) {
                 value={drive.lastBackupAt ? dateTime(drive.lastBackupAt) : 'ещё не было'}
               />
               <Text style={styles.hint}>
-                Копия делается сама раз в сутки — вместе с фото и паспортами. На Диске хранятся последние {KEEP_BACKUPS} копий в папке «Долги».
+                Копия делается сама раз в сутки — вместе с фото и паспортами. Все копии хранятся в папке «Долги» на Диске.
               </Text>
             </>
           ) : (

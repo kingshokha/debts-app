@@ -6,6 +6,7 @@ import * as db from './db';
 import { newId } from './id';
 import type { DebtBook } from './import/debtBook';
 import { applyPlan, type ImportPlan, planImport } from './import/merge';
+import { balanceOf, lastCommentOf } from './contactMath';
 import { deletePhotos } from './photos';
 import type { Contact, Group, Operation, SortSettings, ViewSettings } from './types';
 
@@ -15,12 +16,7 @@ const VIEW_KEY = 'debts/view/v1';
 const DEFAULT_SORT: SortSettings = { key: 'date', desc: true, showZero: true };
 const DEFAULT_VIEW: ViewSettings = { mode: 'all', groupId: null };
 
-/** Баланс в дирамах. */
-export const balanceOf = (c: Contact) => c.operations.reduce((s, op) => s + op.amount, 0);
-
-export const lastDateOf = (c: Contact) => c.operations.at(-1)?.date ?? c.createdAt;
-
-export const lastCommentOf = (c: Contact) => c.operations.findLast((op) => op.comment)?.comment ?? '';
+export { balanceOf, lastCommentOf, lastDateOf } from './contactMath';
 
 const insertOp = (ops: Operation[], op: Operation) => [...ops, op].sort((a, b) => a.date - b.date);
 

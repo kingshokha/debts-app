@@ -29,7 +29,8 @@ import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
 import { useAppLock } from './src/lock';
 import { SettingsProvider, useSettings } from './src/settings';
-import { balanceOf, lastDateOf, useDebts } from './src/store';
+import { matchesSearch, sortContacts } from './src/contactMath';
+import { balanceOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
 
@@ -139,21 +140,14 @@ function MainScreen() {
     return { plus, minus, total: plus + minus };
   }, [scope]);
 
+  // Сортируем только при смене поля или данных; направление — разворот готового списка
+  const sorted = useMemo(() => sortContacts(scope, sort.key), [scope, sort.key]);
+
   const visible = useMemo(() => {
     const q = search?.trim().toLowerCase() ?? '';
-    const list = scope.filter((c) => {
-      if (!sort.showZero && balanceOf(c) === 0) return false;
-      if (!q) return true;
-      return c.name.toLowerCase().includes(q) || c.operations.some((op) => op.comment.toLowerCase().includes(q));
-    });
-    const dir = sort.desc ? -1 : 1;
-    const cmp = {
-      name: (a: typeof list[0], b: typeof list[0]) => a.name.localeCompare(b.name, 'ru'),
-      amount: (a: typeof list[0], b: typeof list[0]) => balanceOf(a) - balanceOf(b),
-      date: (a: typeof list[0], b: typeof list[0]) => lastDateOf(a) - lastDateOf(b),
-    }[sort.key];
-    return list.sort((a, b) => dir * cmp(a, b));
-  }, [scope, sort, search]);
+    const ordered = sort.desc ? [...sorted].reverse() : sorted;
+    return ordered.filter((c) => (sort.showZero || balanceOf(c) !== 0) && matchesSearch(c, q));
+  }, [sorted, sort.desc, sort.showZero, search]);
 
   // Выпадающий список комментариев: прошлые (свежие сверху), затем шаблоны заметок; без повторов
   const suggestions = useMemo(() => {

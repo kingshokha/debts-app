@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { confirmAction, notify } from '../confirm';
-import { authenticateBiometric, biometricReady, clearPin, lockSupported, savePin } from '../lock';
+import { authenticateBiometric, biometricReady, checkPin, clearPin, lockSupported, savePin } from '../lock';
 import { FONT_SIZES, FontScaleContext, useSettings } from '../settings';
 import { colors } from '../theme';
 import { checkAndApplyUpdate, currentVersionLabel, updatesEnabled } from '../updates';
@@ -12,8 +12,17 @@ import { Screen } from './Screen';
 
 type Props = { onClose: () => void };
 
-/** Установка кода: ввести и повторить. step — какой ввод сейчас; first — первый ввод. */
-type PinSetup = { step: 'enter' } | { step: 'repeat'; first: string };
+/**
+ * Установка кода: при смене — сначала текущий код, затем новый и повтор.
+ * step — какой ввод сейчас; first — первый ввод нового кода.
+ */
+type PinSetup = { step: 'current' } | { step: 'enter' } | { step: 'repeat'; first: string };
+
+const PIN_TITLES: Record<PinSetup['step'], string> = {
+  current: 'Введите текущий код',
+  enter: 'Придумайте код из 4 цифр',
+  repeat: 'Повторите код',
+};
 
 export function SettingsScreen({ onClose }: Props) {
   const { settings, update } = useSettings();
@@ -34,13 +43,19 @@ export function SettingsScreen({ onClose }: Props) {
     }
   };
 
-  const startPinSetup = () => {
+  /** Новый код — при включении входа; смена кода начинается с проверки текущего. */
+  const startPinSetup = (change = false) => {
     setPinError(null);
-    setPinSetup({ step: 'enter' });
+    setPinSetup({ step: change ? 'current' : 'enter' });
   };
 
   const onPin = async (pin: string) => {
     if (!pinSetup) return;
+    if (pinSetup.step === 'current') {
+      if (!(await checkPin(pin))) return setPinError('Неверный код');
+      setPinError(null);
+      return setPinSetup({ step: 'enter' });
+    }
     if (pinSetup.step === 'enter') {
       setPinError(null);
       return setPinSetup({ step: 'repeat', first: pin });
@@ -116,7 +131,7 @@ export function SettingsScreen({ onClose }: Props) {
                 disabled={!settings.lockEnabled}
               />
               {settings.lockEnabled ? (
-                <Pressable style={styles.option} onPress={startPinSetup}>
+                <Pressable style={styles.option} onPress={() => startPinSetup(true)}>
                   <MaterialCommunityIcons name="form-textbox-password" size={24} color={colors.muted} />
                   <Text style={styles.optionText}>Сменить код</Text>
                 </Pressable>
@@ -149,7 +164,7 @@ export function SettingsScreen({ onClose }: Props) {
 
       {pinSetup ? (
         <PinScreen
-          title={pinSetup.step === 'enter' ? 'Придумайте код из 4 цифр' : 'Повторите код'}
+          title={PIN_TITLES[pinSetup.step]}
           error={pinError}
           onComplete={onPin}
           onCancel={() => setPinSetup(null)}

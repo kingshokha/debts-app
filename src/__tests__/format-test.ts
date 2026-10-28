@@ -1,4 +1,4 @@
-import { amountToInput, formatAgo, formatAmount, formatDateTimeFull, parseAmount, plural } from '../format';
+import { amountToInput, formatAgo, formatAmount, formatAmountShort, formatDateTimeFull, parseAmount, plural } from '../format';
 
 describe('суммы в дирамах', () => {
   it('показывает сомони с двумя знаками', () => {
@@ -7,6 +7,13 @@ describe('суммы в дирамах', () => {
     expect(formatAmount(150_050, false)).toBe('1 500,50');
     expect(formatAmount(5)).toBe('+0,05');
     expect(formatAmount(0)).toBe('0,00');
+  });
+
+  it('коротко — без «,00», если дирамов нет', () => {
+    expect(formatAmountShort(82_003_200)).toBe('+820 032');
+    expect(formatAmountShort(-11_600)).toBe('-116');
+    expect(formatAmountShort(1_250)).toBe('+12,50');
+    expect(formatAmountShort(0)).toBe('0');
   });
 
   it('переводит ввод в сомони в целые дирамы', () => {

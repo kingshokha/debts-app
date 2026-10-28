@@ -12,9 +12,11 @@ type Props = {
   onPress: (id: string) => void;
   onMenu: (id: string, anchor: { x: number; y: number; height: number }) => void;
   onPhoto: (id: string) => void;
+  /** Долгое нажатие — история операций контакта. */
+  onHistory: (id: string) => void;
 };
 
-export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu, onPhoto }: Props) {
+export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu, onPhoto, onHistory }: Props) {
   const dotsRef = useRef<ComponentRef<typeof View>>(null);
   // Фото из копии с другого устройства может не открыться — тогда просто не показываем его
   const [brokenPhoto, setBrokenPhoto] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu, o
       style={styles.row}
       android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
       onPress={() => onPress(contact.id)}
-      onLongPress={openMenu}
+      onLongPress={() => onHistory(contact.id)}
     >
       {photo ? (
         <Pressable onPress={() => onPhoto(contact.id)} hitSlop={6} style={styles.avatarBtn}>
@@ -61,6 +63,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     marginHorizontal: 6,
     marginBottom: 4,
+    minHeight: 45,
     paddingLeft: 14,
     flexDirection: 'row',
     alignItems: 'center',

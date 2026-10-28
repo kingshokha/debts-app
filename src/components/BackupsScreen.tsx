@@ -4,9 +4,9 @@ import { ActivityIndicator, FlatList, Pressable, Share, StyleSheet, View } from 
 import { serializeBackup } from '../backup';
 import { confirmAction, notify } from '../confirm';
 import type { DriveFile } from '../drive/api';
-import { backupStats, deleteDriveBackup } from '../drive/backup';
+import { backupStats, deleteDriveBackup, fillBackupStats } from '../drive/backup';
 import type { useDrive } from '../drive/useDrive';
-import { formatAgo, formatAmount } from '../format';
+import { formatAgo, formatAmountShort } from '../format';
 import { amountColor, colors } from '../theme';
 import type { Contact, Group } from '../types';
 import { Text } from '../ui/Text';
@@ -40,17 +40,38 @@ export function BackupsScreen({ drive, contacts, groups, templates, onClose, onI
   const [itemMenu, setItemMenu] = useState<{ file: DriveFile; anchor: Anchor } | null>(null);
 
   const { account, listBackups } = drive;
+
+  /** Показывает список и дозаполняет сводки старых копий по одной (cancelled — экран закрыт). */
+  const show = useCallback(async (list: DriveFile[], cancelled: () => boolean) => {
+    setBackups(list);
+    for (const file of list) {
+      if (cancelled()) return;
+      if (backupStats(file)) continue;
+      try {
+        const filled = await fillBackupStats(file);
+        if (!cancelled()) setBackups((current) => current?.map((f) => (f.id === filled.id ? filled : f)) ?? null);
+      } catch (e) {
+        console.warn('Не удалось посчитать сводку копии', file.name, e);
+        // Только в памяти: вместо «Подсчёт…» покажем имя файла
+        const failed = { ...file, appProperties: { ...file.appProperties, statsFailed: '1' } };
+        if (!cancelled()) setBackups((current) => current?.map((f) => (f.id === file.id ? failed : f)) ?? null);
+      }
+    }
+  }, []);
+
   const load = useCallback(async () => {
     if (!account) return;
     setLoading(true);
     try {
-      setBackups(await listBackups());
+      const list = await listBackups();
+      setLoading(false);
+      await show(list, () => false);
     } catch (e) {
       notify('Не удалось получить список копий', message(e));
     } finally {
       setLoading(false);
     }
-  }, [account, listBackups]);
+  }, [account, listBackups, show]);
 
   // Список обновляется при открытии и после каждой новой копии
   const { lastBackupAt } = drive;
@@ -58,12 +79,14 @@ export function BackupsScreen({ drive, contacts, groups, templates, onClose, onI
     if (!account) return;
     let cancelled = false;
     listBackups()
-      .then((list) => !cancelled && setBackups(list))
+      .then((list) => {
+        if (!cancelled) return show(list, () => cancelled);
+      })
       .catch((e) => !cancelled && notify('Не удалось получить список копий', message(e)));
     return () => {
       cancelled = true;
     };
-  }, [account, listBackups, lastBackupAt]);
+  }, [account, listBackups, lastBackupAt, show]);
 
   const headerItems: { action: HeaderAction; label: string }[] = [
     ...(drive.account
@@ -224,13 +247,13 @@ function BackupRow({ file, onMenu }: { file: DriveFile; onMenu: (anchor: Anchor)
               <Text style={styles.count}>{stats.operations}</Text>
             </View>
             <Text style={styles.totals}>
-              <Text style={{ color: amountColor(stats.positive) }}>{formatAmount(stats.positive)}</Text>
+              <Text style={{ color: amountColor(stats.positive) }}>{formatAmountShort(stats.positive)}</Text>
               <Text style={styles.sep}> | </Text>
-              <Text style={{ color: amountColor(stats.negative) }}>{formatAmount(stats.negative)}</Text>
+              <Text style={{ color: amountColor(stats.negative) }}>{formatAmountShort(stats.negative)}</Text>
             </Text>
           </>
         ) : (
-          <Text style={styles.count}>{file.name}</Text>
+          <Text style={styles.pending}>{file.appProperties?.statsFailed ? file.name : 'Подсчёт…'}</Text>
         )}
       </View>
       <View style={styles.side}>
@@ -277,6 +300,7 @@ const styles = StyleSheet.create({
   count: { color: colors.text, fontSize: 16 },
   gap: { marginLeft: 12 },
   totals: { fontSize: 16 },
+  pending: { color: colors.muted, fontSize: 15 },
   sep: { color: colors.muted },
   side: { justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12 },
 });

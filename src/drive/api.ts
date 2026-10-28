@@ -137,6 +137,11 @@ export async function uploadFile(file: File, name: string, parentId: string, mim
   }
 }
 
+/** Меняет только пометки файла (appProperties), содержимое не трогает. */
+export async function setAppProperties(id: string, appProperties: Record<string, string>) {
+  await request(`${API}/files/${id}?fields=id`, { method: 'PATCH', headers: json, body: JSON.stringify({ appProperties }) });
+}
+
 export async function downloadText(id: string) {
   return (await request(`${API}/files/${id}?alt=media`)).text();
 }

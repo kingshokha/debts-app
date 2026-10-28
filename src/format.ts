@@ -12,6 +12,9 @@ export function formatAmount(dirams: number, withPlus = true): string {
   return body;
 }
 
+/** Как formatAmount, но целые сомони без «,00»: «+820 032», «-116», «+12,50». */
+export const formatAmountShort = (dirams: number, withPlus = true) => formatAmount(dirams, withPlus).replace(/,00$/, '');
+
 /** Введённая сумма в сомони (можно выражением: "100+50,5") -> дирамы; null, если не разобрать. */
 export function parseAmount(input: string): number | null {
   const somoni = evalExpression(input);

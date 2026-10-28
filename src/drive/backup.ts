@@ -1,5 +1,6 @@
 import { type Backup, normalizeBackup, serializeBackup } from '../backup';
 import type { AppData } from '../import/merge';
+import type { Contact } from '../types';
 import { isAppPhoto, photoFile } from '../photos';
 import {
   deleteFile,
@@ -10,6 +11,7 @@ import {
   findOrCreateFolder,
   listFiles,
   quote,
+  setAppProperties,
   uploadFile,
   uploadText,
 } from './api';
@@ -26,17 +28,32 @@ const PHOTOS_FOLDER = 'Фото';
 /** Сводка копии: хранится в appProperties файла, чтобы список копий не скачивал их содержимое. */
 export type BackupStats = { contacts: number; operations: number; positive: number; negative: number };
 
-function statsOf(data: AppData): BackupStats {
+function statsOf(contacts: Contact[]): BackupStats {
   let positive = 0;
   let negative = 0;
   let operations = 0;
-  for (const c of data.contacts) {
+  for (const c of contacts) {
     const balance = c.operations.reduce((s, op) => s + op.amount, 0);
     if (balance > 0) positive += balance;
     else negative += balance;
     operations += c.operations.length;
   }
-  return { contacts: data.contacts.length, operations, positive, negative };
+  return { contacts: contacts.length, operations, positive, negative };
+}
+
+const statsProperties = (stats: BackupStats) =>
+  Object.fromEntries(Object.entries(stats).map(([k, v]) => [k, String(v)]));
+
+/**
+ * Для копии, сделанной до появления сводок: скачивает её, считает сводку и сохраняет в пометки
+ * файла на Диске — в следующий раз она покажется сразу. Возвращает файл со сводкой.
+ */
+export async function fillBackupStats(file: DriveFile): Promise<DriveFile> {
+  const backup = normalizeBackup(JSON.parse(await downloadText(file.id)));
+  if (!backup) throw new Error('Файл копии повреждён.');
+  const properties = statsProperties(statsOf(backup.contacts));
+  await setAppProperties(file.id, properties);
+  return { ...file, appProperties: { ...file.appProperties, ...properties } };
 }
 
 /** Сводка из appProperties; null — копия сделана до появления сводок. */
@@ -74,8 +91,7 @@ export async function backupToDrive(data: AppData, onProgress?: Progress) {
 
   onProgress?.('Сохранение данных…', 0.85);
   const name = backupFileName(new Date());
-  const stats = Object.fromEntries(Object.entries(statsOf(data)).map(([k, v]) => [k, String(v)]));
-  await uploadText(name, rootId, serializeBackup(contacts, data.groups, data.templates), stats);
+  await uploadText(name, rootId, serializeBackup(contacts, data.groups, data.templates), statsProperties(statsOf(data.contacts)));
   onProgress?.('Готово', 1);
   return { name, photosUploaded: toUpload.length };
 }

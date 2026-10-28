@@ -211,6 +211,7 @@ function MainScreen() {
   );
 
   const onRowPhoto = useCallback((id: string) => setPhotoId(id), []);
+  const onRowHistory = useCallback((id: string) => setHistoryId(id), []);
 
   const choosePhoto = async (contactId: string, source: PhotoSource) => {
     try {
@@ -340,7 +341,7 @@ function MainScreen() {
         <FlatList
           data={visible}
           keyExtractor={(c) => c.id}
-          renderItem={({ item }) => <ContactRow contact={item} onPress={onRowPress} onMenu={onRowMenu} onPhoto={onRowPhoto} />}
+          renderItem={({ item }) => <ContactRow contact={item} onPress={onRowPress} onMenu={onRowMenu} onPhoto={onRowPhoto} onHistory={onRowHistory} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 100 }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={

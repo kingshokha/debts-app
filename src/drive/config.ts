@@ -4,4 +4,4 @@
  * Кроме него в том же проекте должен быть клиент типа «Android» с пакетом com.blend.debts
  * и SHA-1 ключа подписи из EAS — иначе Google откажет во входе.
  */
-export const GOOGLE_WEB_CLIENT_ID = '';
+export const GOOGLE_WEB_CLIENT_ID = '845948383221-snnigt9adviobatcsthcon9edg2r3gj1.apps.googleusercontent.com';

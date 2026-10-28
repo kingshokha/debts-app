@@ -78,7 +78,7 @@ export function HistoryModal({ contact, suggestions, onClose, onDeleteOperation,
         <FlatList
           data={rows}
           keyExtractor={(op) => op.id}
-          contentContainerStyle={{ padding: 8 }}
+          contentContainerStyle={{ padding: 6, paddingTop: 4 }}
           ListEmptyComponent={<Text style={styles.empty}>Операций нет</Text>}
           renderItem={({ item }) => (
             <HistoryRow op={item} after={item.after} onMenu={(anchor) => setMenu({ opId: item.id, anchor })} />
@@ -128,11 +128,11 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 18, fontWeight: '600', marginTop: 10 },
   subtitle: { color: colors.muted, fontSize: 13 },
   balance: { fontSize: 18, fontWeight: '700', marginTop: 10 },
-  row: { backgroundColor: colors.card, borderRadius: 3, paddingLeft: 14, paddingVertical: 14, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  row: { backgroundColor: colors.card, borderRadius: 3, paddingLeft: 14, paddingVertical: 7, marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 12 },
   date: { color: colors.muted, fontSize: 13 },
   comment: { color: colors.text, fontSize: 16, marginTop: 4 },
   amount: { fontSize: 18, fontWeight: '700' },
-  after: { color: colors.muted, fontSize: 12, marginTop: 4 },
-  dots: { paddingHorizontal: 6, paddingVertical: 8 },
+  after: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  dots: { paddingHorizontal: 6, paddingVertical: 4 },
   empty: { color: colors.muted, textAlign: 'center', marginTop: 40, fontSize: 16 },
 });

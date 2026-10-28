@@ -48,7 +48,7 @@ export const ContactRow = memo(function ContactRow({ contact, onPress, onMenu, o
         ) : null}
       </View>
       <Text style={[styles.amount, { color: amountColor(balance) }]}>{formatAmount(balance)}</Text>
-      <Pressable ref={dotsRef} onPress={openMenu} hitSlop={10} style={styles.dots}>
+      <Pressable ref={dotsRef} onPress={openMenu} hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }} style={styles.dots}>
         <MaterialCommunityIcons name="dots-vertical" size={24} color={colors.text} />
       </Pressable>
     </Pressable>
@@ -60,18 +60,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 3,
     marginHorizontal: 6,
-    marginBottom: 7,
-    minHeight: 64,
-    paddingLeft: 16,
+    marginBottom: 4,
+    paddingLeft: 14,
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 2,
   },
-  avatarBtn: { marginLeft: -6, marginRight: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.bg },
-  texts: { flex: 1, paddingVertical: 10 },
+  avatarBtn: { marginLeft: -6, marginRight: 10 },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bg },
+  texts: { flex: 1, paddingVertical: 7 },
   name: { color: colors.text, fontSize: 19 },
-  comment: { color: colors.muted, fontSize: 15, fontStyle: 'italic', marginTop: 2 },
+  comment: { color: colors.muted, fontSize: 15, fontStyle: 'italic', marginTop: 1 },
   amount: { fontSize: 19, fontWeight: '700', marginLeft: 10 },
-  dots: { paddingHorizontal: 10, paddingVertical: 18 },
+  dots: { paddingHorizontal: 10, paddingVertical: 4 },
 });

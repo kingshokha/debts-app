@@ -341,7 +341,7 @@ function MainScreen() {
           data={visible}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <ContactRow contact={item} onPress={onRowPress} onMenu={onRowMenu} onPhoto={onRowPhoto} />}
-          contentContainerStyle={{ paddingTop: 7, paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 100 }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <Text style={styles.empty}>

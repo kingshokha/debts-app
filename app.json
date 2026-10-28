@@ -43,6 +43,12 @@
         "projectId": "4e84645e-25e0-472a-ac39-c5f5c642c576"
       }
     },
-    "owner": "kingshokha"
+    "owner": "kingshokha",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4e84645e-25e0-472a-ac39-c5f5c642c576"
+    }
   }
 }

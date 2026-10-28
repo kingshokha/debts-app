@@ -28,6 +28,7 @@ import { formatAmount } from './src/format';
 import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
 import { useAppLock } from './src/lock';
+import { useUpdateNotice } from './src/updates';
 import { SettingsProvider, useSettings } from './src/settings';
 import { matchesSearch, sortContacts } from './src/contactMath';
 import { balanceOf, useDebts } from './src/store';
@@ -105,6 +106,7 @@ function MainScreen() {
   const [importFile, setImportFile] = useState<PickedText | null>(null);
   const { settings } = useSettings();
   const lock = useAppLock(settings.lockEnabled);
+  useUpdateNotice();
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 

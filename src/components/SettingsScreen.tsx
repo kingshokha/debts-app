@@ -5,6 +5,7 @@ import { confirmAction, notify } from '../confirm';
 import { authenticateBiometric, biometricReady, clearPin, lockSupported, savePin } from '../lock';
 import { FONT_SIZES, FontScaleContext, useSettings } from '../settings';
 import { colors } from '../theme';
+import { checkAndApplyUpdate, currentVersionLabel, updatesEnabled } from '../updates';
 import { Text } from '../ui/Text';
 import { PinScreen } from './PinScreen';
 import { Screen } from './Screen';
@@ -18,6 +19,20 @@ export function SettingsScreen({ onClose }: Props) {
   const { settings, update } = useSettings();
   const [pinSetup, setPinSetup] = useState<PinSetup | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const checkUpdates = async () => {
+    setChecking(true);
+    try {
+      // Если обновление есть, приложение скачает его и перезапустится — до сообщения дело не дойдёт
+      await checkAndApplyUpdate();
+      notify('Обновлений нет', 'У вас последняя версия.');
+    } catch (e) {
+      notify('Не удалось проверить обновления', String((e as Error)?.message ?? e));
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const startPinSetup = () => {
     setPinError(null);
@@ -113,6 +128,23 @@ export function SettingsScreen({ onClose }: Props) {
             </Text>
           </>
         ) : null}
+
+        <Text style={styles.section}>Обновления</Text>
+        <View style={styles.card}>
+          <View style={styles.option}>
+            <MaterialCommunityIcons name="information-outline" size={24} color={colors.muted} />
+            <View style={styles.switchText}>
+              <Text style={styles.optionText}>Текущая версия</Text>
+              <Text style={styles.hint}>{currentVersionLabel()}</Text>
+            </View>
+          </View>
+          {updatesEnabled ? (
+            <Pressable style={[styles.option, checking && styles.disabled]} onPress={checkUpdates} disabled={checking}>
+              <MaterialCommunityIcons name="update" size={24} color={colors.muted} />
+              <Text style={styles.optionText}>{checking ? 'Проверка…' : 'Проверить обновления'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </ScrollView>
 
       {pinSetup ? (

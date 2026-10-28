@@ -1,3 +1,5 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { type ComponentRef, useRef } from 'react';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '../ui/Text';
 import { colors } from '../theme';
@@ -12,9 +14,11 @@ type Props<T extends string> = {
   anchor: Anchor | null;
   onSelect: (action: T) => void;
   onClose: () => void;
+  /** К какому краю экрана прижать меню: «⋮» справа, «☰» слева. */
+  align?: 'left' | 'right';
 };
 
-export function PopupMenu<T extends string>({ items, anchor, onSelect, onClose }: Props<T>) {
+export function PopupMenu<T extends string>({ items, anchor, onSelect, onClose, align = 'right' }: Props<T>) {
   const { height: winHeight } = useWindowDimensions();
   if (!anchor) return null;
 
@@ -26,7 +30,7 @@ export function PopupMenu<T extends string>({ items, anchor, onSelect, onClose }
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View style={[styles.menu, { top }]}>
+      <View style={[styles.menu, align === 'left' ? styles.left : styles.right, { top }]}>
         {items.map((item) => (
           <Pressable
             key={item.action}
@@ -45,16 +49,44 @@ export function PopupMenu<T extends string>({ items, anchor, onSelect, onClose }
   );
 }
 
+/** Кнопка-иконка, которая открывает меню прямо под собой. */
+export function MenuButton({
+  onOpen,
+  icon = 'dots-vertical',
+  color = colors.text,
+  size = 24,
+  style,
+}: {
+  onOpen: (anchor: Anchor) => void;
+  icon?: 'dots-vertical' | 'menu';
+  color?: string;
+  size?: number;
+  style?: object;
+}) {
+  const ref = useRef<ComponentRef<typeof View>>(null);
+  return (
+    <Pressable
+      ref={ref}
+      hitSlop={10}
+      style={style}
+      onPress={() => ref.current?.measureInWindow((x, y, _w, height) => onOpen({ x, y, height }))}
+    >
+      <MaterialCommunityIcons name={icon} size={size} color={color} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   menu: {
     position: 'absolute',
-    right: 8,
     minWidth: 230,
     backgroundColor: '#3a3a3a',
     paddingVertical: 8,
     elevation: 10,
     borderRadius: 2,
   },
+  left: { left: 8 },
+  right: { right: 8 },
   item: { height: ITEM_HEIGHT, justifyContent: 'center', paddingHorizontal: 22 },
   text: { color: colors.text, fontSize: 17 },
 });

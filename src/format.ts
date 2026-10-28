@@ -96,3 +96,42 @@ export function evalExpression(input: string): number | null {
     return null;
   }
 }
+
+/** «1 час», «2 часа», «5 часов» */
+export function plural(n: number, [one, few, many]: [string, string, string]) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** «только что», «5 минут назад», «19 часов назад», «3 дня назад»; старше недели — «20 окт. 2026 г.» */
+export function formatAgo(ts: number, now = Date.now()) {
+  const diff = Math.max(0, now - ts);
+  if (diff < MINUTE) return 'только что';
+  if (diff < HOUR) {
+    const m = Math.floor(diff / MINUTE);
+    return `${m} ${plural(m, ['минуту', 'минуты', 'минут'])} назад`;
+  }
+  if (diff < DAY) {
+    const h = Math.floor(diff / HOUR);
+    return `${h} ${plural(h, ['час', 'часа', 'часов'])} назад`;
+  }
+  if (diff < 8 * DAY) {
+    const d = Math.floor(diff / DAY);
+    return `${d} ${plural(d, ['день', 'дня', 'дней'])} назад`;
+  }
+  return `${formatDate(ts)} г.`;
+}
+
+const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+/** «27 окт. 2026, вт, 17:09» */
+export function formatDateTimeFull(ts: number) {
+  return `${formatDate(ts)}, ${WEEKDAYS[new Date(ts).getDay()]}, ${formatTime(ts)}`;
+}

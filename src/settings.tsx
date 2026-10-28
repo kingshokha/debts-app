@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { colors } from './theme';
 
 const KEY = 'debts/settings/v1';
 
@@ -63,6 +65,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ settings, loaded, update }), [settings, loaded, update]);
   const scale = FONT_SIZES.find((f) => f.key === settings.fontSize)?.scale ?? FONT_SIZES[1].scale;
+
+  // Пока настройки не прочитаны, приложение не показываем: иначе мелькнул бы не тот шрифт,
+  // а данные — до экрана входа по коду
+  if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
     <SettingsContext.Provider value={value}>

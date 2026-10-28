@@ -1,4 +1,4 @@
-import { amountToInput, formatAmount, parseAmount } from '../format';
+import { amountToInput, formatAgo, formatAmount, formatDateTimeFull, parseAmount, plural } from '../format';
 
 describe('суммы в дирамах', () => {
   it('показывает сомони с двумя знаками', () => {
@@ -22,5 +22,30 @@ describe('суммы в дирамах', () => {
     expect(amountToInput(-150_050)).toBe('1500,5');
     expect(amountToInput(10_000)).toBe('100');
     expect(amountToInput(7)).toBe('0,07');
+  });
+});
+
+describe('даты', () => {
+  const now = new Date(2026, 9, 28, 12, 0).getTime();
+  const H = 60 * 60 * 1000;
+
+  it('пишет, сколько прошло, с правильным склонением', () => {
+    expect(formatAgo(now - 30 * 1000, now)).toBe('только что');
+    expect(formatAgo(now - 21 * 60 * 1000, now)).toBe('21 минуту назад');
+    expect(formatAgo(now - 19 * H, now)).toBe('19 часов назад');
+    expect(formatAgo(now - 22 * H, now)).toBe('22 часа назад');
+    expect(formatAgo(now - 3 * 24 * H, now)).toBe('3 дня назад');
+    expect(formatAgo(now - 7 * 24 * H, now)).toBe('7 дней назад');
+    expect(formatAgo(new Date(2026, 9, 20, 9, 0).getTime(), now)).toBe('20 окт. 2026 г.');
+  });
+
+  it('склоняет числа', () => {
+    expect([1, 2, 5, 11, 12, 14, 21, 22, 25, 111].map((n) => plural(n, ['день', 'дня', 'дней']))).toEqual([
+      'день', 'дня', 'дней', 'дней', 'дней', 'дней', 'день', 'дня', 'дней', 'дней',
+    ]);
+  });
+
+  it('показывает дату с днём недели', () => {
+    expect(formatDateTimeFull(new Date(2026, 9, 27, 17, 9).getTime())).toBe('27 окт. 2026, вт, 17:09');
   });
 });

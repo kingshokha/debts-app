@@ -5,26 +5,30 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-
 import { Text, TextInput } from './src/ui/Text';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddDialog } from './src/components/AddDialog';
-import { BackupDialog } from './src/components/BackupDialog';
+import { AllHistoryScreen } from './src/components/AllHistoryScreen';
+import { BackupsScreen } from './src/components/BackupsScreen';
 import { BalanceDialog } from './src/components/BalanceDialog';
 import { ContactGroupDialog } from './src/components/ContactGroupDialog';
 import { ContactRow } from './src/components/ContactRow';
 import { DebtBookImportDialog } from './src/components/DebtBookImportDialog';
 import { Dialog } from './src/components/Dialog';
-import { DriveDialog } from './src/components/DriveDialog';
 import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
+import { LockScreen } from './src/components/LockScreen';
 import { NameDialog } from './src/components/NameDialog';
 import { PassportDialog } from './src/components/PassportDialog';
 import { PhotoDialog } from './src/components/PhotoDialog';
-import { PopupMenu } from './src/components/PopupMenu';
+import { type Anchor, MenuButton, PopupMenu } from './src/components/PopupMenu';
+import { SettingsScreen } from './src/components/SettingsScreen';
 import { SortDialog } from './src/components/SortDialog';
+import { TextImportDialog } from './src/components/TextImportDialog';
 import { confirmAction, notify } from './src/confirm';
 import { useDrive } from './src/drive/useDrive';
 import { formatAmount } from './src/format';
 import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
-import { SettingsProvider } from './src/settings';
+import { useAppLock } from './src/lock';
+import { SettingsProvider, useSettings } from './src/settings';
 import { balanceOf, lastDateOf, useDebts } from './src/store';
 import { amountColor, colors } from './src/theme';
 import type { Contact, Group } from './src/types';
@@ -48,6 +52,15 @@ type NameEdit =
   | { kind: 'contact'; id: string; initial: string }
   | { kind: 'newGroup'; initial: string }
   | { kind: 'renameGroup'; id: string; initial: string };
+
+type MainAction = 'history' | 'backups' | 'settings';
+
+/** Меню «☰». */
+const MAIN_MENU: { action: MainAction; label: string }[] = [
+  { action: 'history', label: 'История операций' },
+  { action: 'backups', label: 'Резервные копии' },
+  { action: 'settings', label: 'Настройки' },
+];
 
 const NAME_DIALOG_TITLE: Record<NameEdit['kind'], string> = {
   contact: 'Переименовать',
@@ -75,9 +88,11 @@ function MainScreen() {
   const [search, setSearch] = useState<string | null>(null); // null — поиск закрыт
   const [addOpen, setAddOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
-  const [backupOpen, setBackupOpen] = useState(false);
-  // Растёт при каждом открытии Add/Backup: новый key пересоздаёт диалог с чистыми полями
+  // Растёт при каждом открытии «Добавления» и импорта из текста: новый key пересоздаёт диалог с чистыми полями
   const [dialogKey, setDialogKey] = useState(0);
+  const [mainMenu, setMainMenu] = useState<Anchor | null>(null);
+  const [screen, setScreen] = useState<MainAction | null>(null);
+  const [textImportOpen, setTextImportOpen] = useState(false);
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number; height: number } } | null>(null);
   const [balanceId, setBalanceId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -87,7 +102,8 @@ function MainScreen() {
   const [photoId, setPhotoId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<PickedText | null>(null);
-  const [driveOpen, setDriveOpen] = useState(false);
+  const { settings } = useSettings();
+  const lock = useAppLock(settings.lockEnabled);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 
@@ -219,12 +235,10 @@ function MainScreen() {
     setAddOpen(true);
   };
 
-  // Меню «☰» остаётся открытым, пока выбирается файл: так системный выбор файла не конфликтует с закрытием окна
   const importFromFile = async () => {
     try {
       const file = await pickTextFile();
       if (!file) return;
-      setBackupOpen(false);
       setImportFile(file);
     } catch (e) {
       console.warn(e);
@@ -232,9 +246,9 @@ function MainScreen() {
     }
   };
 
-  const openBackup = () => {
+  const openTextImport = () => {
     setDialogKey((k) => k + 1);
-    setBackupOpen(true);
+    setTextImportOpen(true);
   };
 
   const submitName = (name: string) => {
@@ -260,9 +274,7 @@ function MainScreen() {
       <View style={[styles.header, { paddingTop: insets.top }]}>
         {search === null ? (
           <>
-            <Pressable onPress={openBackup} hitSlop={8} style={styles.iconBtn}>
-              <MaterialCommunityIcons name="menu" size={30} color="#fff" />
-            </Pressable>
+            <MenuButton onOpen={setMainMenu} icon="menu" size={30} color="#fff" style={styles.iconBtn} />
             <View style={{ flex: 1 }} />
             <View style={styles.sep} />
             <Pressable onPress={() => setSearch('')} hitSlop={8} style={styles.iconBtn}>
@@ -421,27 +433,45 @@ function MainScreen() {
           </Pressable>
         ))}
       </Dialog>
-      <BackupDialog
-        key={`backup-${dialogKey}`}
-        visible={backupOpen}
-        contacts={contacts}
-        groups={groups}
-        onClose={() => setBackupOpen(false)}
+      <PopupMenu align="left" items={MAIN_MENU} anchor={mainMenu} onSelect={setScreen} onClose={() => setMainMenu(null)} />
+      {screen === 'history' ? (
+        <AllHistoryScreen
+          contacts={contacts}
+          groups={groups}
+          suggestions={suggestions}
+          onClose={() => setScreen(null)}
+          onOpenContact={setHistoryId}
+          onUpdateOperation={debts.updateOperation}
+          onDeleteOperation={debts.removeOperation}
+        />
+      ) : null}
+      {screen === 'backups' ? (
+        <BackupsScreen
+          drive={drive}
+          contacts={contacts}
+          groups={groups}
+          templates={templates}
+          onClose={() => setScreen(null)}
+          onImportText={openTextImport}
+          onImportFile={importFromFile}
+        />
+      ) : null}
+      {screen === 'settings' ? <SettingsScreen onClose={() => setScreen(null)} /> : null}
+      <TextImportDialog
+        key={`text-import-${dialogKey}`}
+        visible={textImportOpen}
+        contactsCount={contacts.length}
+        onClose={() => setTextImportOpen(false)}
         onImport={debts.importBackup}
-        templates={templates}
-        onImportFile={importFromFile}
-        onGoogleDrive={() => {
-          setBackupOpen(false);
-          setDriveOpen(true);
-        }}
       />
-      <DriveDialog visible={driveOpen} drive={drive} onClose={() => setDriveOpen(false)} />
       <DebtBookImportDialog
         file={importFile}
         onClose={() => setImportFile(null)}
         onPlan={debts.planDebtBookImport}
         onImport={debts.importDebtBook}
       />
+      {/* Последним, чтобы закрывать всё, включая открытые разделы */}
+      {lock.locked ? <LockScreen biometric={settings.biometric} onUnlock={lock.unlock} /> : null}
     </View>
   );
 }

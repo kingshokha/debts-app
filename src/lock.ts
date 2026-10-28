@@ -1,6 +1,6 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 // Вход в приложение по 4-значному коду и, по желанию, отпечатку пальца.
@@ -27,6 +27,11 @@ export async function checkPin(pin: string) {
 export async function biometricReady() {
   if (!lockSupported) return false;
   return (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync());
+}
+
+/** Закрывает окно отпечатка, если оно ещё открыто (Android). */
+export function cancelBiometric() {
+  if (Platform.OS === 'android') LocalAuthentication.cancelAuthenticate().catch(() => {});
 }
 
 /** Системное окно отпечатка. true — подтверждено. */
@@ -65,5 +70,7 @@ export function useAppLock(lockEnabled: boolean) {
     return () => sub.remove();
   }, []);
 
-  return { locked, unlock: () => setLocked(false) };
+  // Стабильная ссылка: экран входа не должен перезапускать запрос отпечатка при каждой перерисовке
+  const unlock = useCallback(() => setLocked(false), []);
+  return { locked, unlock };
 }

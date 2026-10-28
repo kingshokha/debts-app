@@ -1,29 +1,39 @@
-import { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } from '@react-native-google-signin/google-signin';
-import { Platform } from 'react-native';
+import type * as GoogleSignInLib from '@react-native-google-signin/google-signin';
+import { Platform, TurboModuleRegistry } from 'react-native';
 import { GOOGLE_WEB_CLIENT_ID } from './config';
 
 /** Доступ только к файлам, которые создало само приложение, — не ко всему Диску. */
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
+// В Expo Go нативного модуля входа Google нет, а библиотека требует его прямо при импорте
+// и роняет всё приложение. Поэтому сначала проверяем модуль, а библиотеку грузим лениво.
+const hasNativeModule = Platform.OS === 'android' && TurboModuleRegistry.get('RNGoogleSignin') != null;
+
 /** Почему Google Диск недоступен; null — доступен. */
 export const driveUnavailableReason =
   Platform.OS !== 'android'
     ? 'Google Диск работает только в приложении для Android.'
-    : !GOOGLE_WEB_CLIENT_ID
-      ? 'Google Диск ещё не настроен: не указан Client ID в src/drive/config.ts.'
-      : null;
+    : !hasNativeModule
+      ? 'В Expo Go Google Диск недоступен — проверьте его в установленном приложении (APK).'
+      : !GOOGLE_WEB_CLIENT_ID
+        ? 'Google Диск ещё не настроен: не указан Client ID в src/drive/config.ts.'
+        : null;
 
 let configured = false;
 
-function ensureConfigured() {
-  if (configured) return;
-  GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, scopes: [DRIVE_SCOPE] });
-  configured = true;
+function google(): typeof GoogleSignInLib {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const lib: typeof GoogleSignInLib = require('@react-native-google-signin/google-signin');
+  if (!configured) {
+    lib.GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, scopes: [DRIVE_SCOPE] });
+    configured = true;
+  }
+  return lib;
 }
 
 /** Вход в Google с доступом к Диску. Возвращает email или null, если пользователь отменил. */
 export async function connect(): Promise<string | null> {
-  ensureConfigured();
+  const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = google();
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
   try {
     const response = await GoogleSignin.signIn();
@@ -46,7 +56,7 @@ export async function connect(): Promise<string | null> {
 /** Подключённый аккаунт без показа окон; null — Диск не подключён. */
 export async function connectedAccount(): Promise<string | null> {
   if (driveUnavailableReason) return null;
-  ensureConfigured();
+  const { GoogleSignin } = google();
   if (!GoogleSignin.hasPreviousSignIn()) return null;
   const current = GoogleSignin.getCurrentUser();
   if (current) return current.user.email;
@@ -56,7 +66,7 @@ export async function connectedAccount(): Promise<string | null> {
 
 /** Токен для Drive API. refresh — выбросить закэшированный (например, после ответа 401). */
 export async function accessToken(refresh = false): Promise<string> {
-  ensureConfigured();
+  const { GoogleSignin } = google();
   if (!GoogleSignin.getCurrentUser()) {
     const response = await GoogleSignin.signInSilently();
     if (response.type !== 'success') throw new Error('Вход в Google устарел — подключите Google Диск заново.');
@@ -71,7 +81,7 @@ export async function accessToken(refresh = false): Promise<string> {
 
 /** Отключает Диск: отзывает доступ приложения и выходит из аккаунта. Файлы на Диске остаются. */
 export async function disconnect() {
-  ensureConfigured();
+  const { GoogleSignin } = google();
   try {
     await GoogleSignin.revokeAccess();
   } catch (e) {

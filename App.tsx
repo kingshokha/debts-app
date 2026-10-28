@@ -10,6 +10,7 @@ import { ContactGroupDialog } from './src/components/ContactGroupDialog';
 import { ContactRow } from './src/components/ContactRow';
 import { DebtBookImportDialog } from './src/components/DebtBookImportDialog';
 import { Dialog } from './src/components/Dialog';
+import { DriveDialog } from './src/components/DriveDialog';
 import { GroupBar } from './src/components/GroupBar';
 import { HistoryModal } from './src/components/HistoryModal';
 import { NameDialog } from './src/components/NameDialog';
@@ -18,6 +19,7 @@ import { PhotoDialog } from './src/components/PhotoDialog';
 import { PopupMenu } from './src/components/PopupMenu';
 import { SortDialog } from './src/components/SortDialog';
 import { confirmAction, notify } from './src/confirm';
+import { useDrive } from './src/drive/useDrive';
 import { formatAmount } from './src/format';
 import { type PickedText, pickTextFile } from './src/import/pickFile';
 import { type PhotoSource, persistPhotos, pickImages } from './src/photos';
@@ -64,6 +66,7 @@ function MainScreen() {
   const insets = useSafeAreaInsets();
   const debts = useDebts();
   const { contacts, groups, templates, sort, view } = debts;
+  const drive = useDrive({ contacts, groups, templates, loaded: debts.loaded }, debts.importBackup);
 
   const [search, setSearch] = useState<string | null>(null); // null — поиск закрыт
   const [addOpen, setAddOpen] = useState(false);
@@ -80,6 +83,7 @@ function MainScreen() {
   const [photoId, setPhotoId] = useState<string | null>(null);
   const [passportId, setPassportId] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<PickedText | null>(null);
+  const [driveOpen, setDriveOpen] = useState(false);
 
   const byId = (id: string | null) => (id ? (contacts.find((c) => c.id === id) ?? null) : null);
 
@@ -420,8 +424,14 @@ function MainScreen() {
         groups={groups}
         onClose={() => setBackupOpen(false)}
         onImport={debts.importBackup}
+        templates={templates}
         onImportFile={importFromFile}
+        onGoogleDrive={() => {
+          setBackupOpen(false);
+          setDriveOpen(true);
+        }}
       />
+      <DriveDialog visible={driveOpen} drive={drive} onClose={() => setDriveOpen(false)} />
       <DebtBookImportDialog
         file={importFile}
         onClose={() => setImportFile(null)}

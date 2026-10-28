@@ -44,6 +44,16 @@ export async function pickImages(source: PhotoSource, { crop = false, multiple =
 
 const isSaved = (uri: string) => uri.startsWith(photosDir().uri);
 
+/** Фото лежит в папке приложения (а не, например, data:-uri в вебе). */
+export const isAppPhoto = (uri: string) => !isWeb && isSaved(uri);
+
+/** Файл фото в папке приложения по имени — для копирования в Google Диск и восстановления оттуда. */
+export function photoFile(name: string) {
+  const dir = photosDir();
+  dir.create({ idempotent: true, intermediates: true });
+  return new File(dir, name);
+}
+
 /**
  * Копирует снимки из временной папки (её может очистить система) в папку приложения.
  * Уже сохранённые и data:-uri возвращает как есть.

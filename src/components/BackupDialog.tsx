@@ -10,23 +10,25 @@ type Props = {
   visible: boolean;
   contacts: Contact[];
   groups: Group[];
+  templates: string[];
   onClose: () => void;
   onImport: (backup: Backup) => void;
   /** «Импорт из файла»: выбор .txt резервной копии долговой книги. */
   onImportFile: () => void;
+  onGoogleDrive: () => void;
 };
 
 /**
  * Меню «☰»: резервная копия через «Поделиться» и восстановление из вставленного текста.
  * Состояние сбрасывается за счёт нового `key` при каждом открытии (см. App).
  */
-export function BackupDialog({ visible, contacts, groups, onClose, onImport, onImportFile }: Props) {
+export function BackupDialog({ visible, contacts, groups, templates, onClose, onImport, onImportFile, onGoogleDrive }: Props) {
   const [importMode, setImportMode] = useState(false);
   const [text, setText] = useState('');
 
   const exportData = async () => {
     onClose();
-    await Share.share({ message: serializeBackup(contacts, groups) });
+    await Share.share({ message: serializeBackup(contacts, groups, templates) });
   };
 
   const importData = () => {
@@ -67,6 +69,10 @@ export function BackupDialog({ visible, contacts, groups, onClose, onImport, onI
         </>
       ) : (
         <>
+          <Pressable style={styles.item} onPress={onGoogleDrive}>
+            <Text style={styles.text}>Google Диск</Text>
+            <Text style={styles.hint}>Автоматическая копия раз в сутки вместе с фото и паспортами</Text>
+          </Pressable>
           <Pressable style={styles.item} onPress={exportData}>
             <Text style={styles.text}>Экспорт (поделиться)</Text>
             <Text style={styles.hint}>Отправьте копию себе в Telegram или сохраните в заметки</Text>

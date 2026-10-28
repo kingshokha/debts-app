@@ -1,13 +1,14 @@
 import { newId } from './id';
 import type { Contact, Group, Operation } from './types';
 
-export type Backup = { contacts: Contact[]; groups: Group[] };
+/** templates — шаблоны заметок; в старых копиях их нет, тогда текущие шаблоны не трогаем. */
+export type Backup = { contacts: Contact[]; groups: Group[]; templates?: string[] };
 
 /** С этой версии суммы в копии — целые дирамы; в более старых — сомони. */
 const DIRAM_VERSION = 3;
 
-export function serializeBackup(contacts: Contact[], groups: Group[]) {
-  return JSON.stringify({ app: 'debts', version: DIRAM_VERSION, contacts, groups });
+export function serializeBackup(contacts: Contact[], groups: Group[], templates: string[]) {
+  return JSON.stringify({ app: 'debts', version: DIRAM_VERSION, contacts, groups, templates });
 }
 
 /** Приводит данные копии к текущей модели. Понимает и старый формат — просто массив контактов. */
@@ -36,7 +37,10 @@ export function normalizeBackup(data: any): Backup | null {
       }))
       .sort((a: Operation, b: Operation) => a.date - b.date),
   }));
-  return { contacts, groups };
+  const templates = Array.isArray(data?.templates)
+    ? data.templates.filter((t: unknown): t is string => typeof t === 'string')
+    : undefined;
+  return { contacts, groups, templates };
 }
 
 export function parseBackup(text: string): Backup | null {

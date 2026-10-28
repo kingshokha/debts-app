@@ -161,12 +161,16 @@ export async function loadAll(): Promise<Stored> {
 }
 
 /** Заменяет всех контактов и группы (восстановление из JSON-копии). */
-export function replaceAll({ contacts, groups }: Backup) {
+export function replaceAll({ contacts, groups, templates }: Backup) {
   return transaction(async (db) => {
     await db.execAsync('DELETE FROM operations; DELETE FROM contacts; DELETE FROM groups;');
     await insertMany(db, 'groups', GROUP_COLUMNS, groups.map(groupRow));
     await insertMany(db, 'contacts', CONTACT_COLUMNS, contacts.map(contactRow));
     await insertMany(db, 'operations', OPERATION_COLUMNS, operationRowsOf(contacts));
+    if (templates) {
+      await db.runAsync('DELETE FROM templates');
+      await insertMany(db, 'templates', ['text', 'position'], templates.map((text, i) => [text, i]));
+    }
   });
 }
 

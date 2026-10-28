@@ -282,7 +282,7 @@ export function useDebts() {
     [setContacts, setGroups],
   );
 
-  /** Заменяет все данные копией. Состояние меняется, только если запись в базу прошла. */
+  /** Заменяет все данные копией. Состояние меняется, только если запись в базу прошла; возвращает успех. */
   const importBackup = useCallback(
     async (backup: Backup) => {
       try {
@@ -290,16 +290,18 @@ export function useDebts() {
       } catch (e) {
         console.warn(e);
         notify('Не удалось восстановить копию', 'Данные остались прежними.');
-        return;
+        return false;
       }
       // Фото, на которые копия больше не ссылается, удаляем, чтобы не копились файлы
       const kept = new Set(backup.contacts.flatMap(photosOf));
       deletePhotos(contactsRef.current.flatMap(photosOf).filter((uri) => !kept.has(uri)));
       setGroups(backup.groups);
       setContacts(backup.contacts);
+      if (backup.templates) setTemplates(backup.templates);
       setView((v) => ({ ...v, groupId: null }));
+      return true;
     },
-    [setContacts, setGroups],
+    [setContacts, setGroups, setTemplates],
   );
 
   /** Что даст импорт файла «долговой книги» с текущими данными: новое, дубли, статистика. */
